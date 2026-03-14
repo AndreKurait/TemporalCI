@@ -110,8 +110,8 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		Status:     &status,
 		Conclusion: &conclusion,
 		Output: &github.CheckRunOutput{
-			Title:   github.Ptr(fmt.Sprintf("CI %s", conclusion)),
-			Summary: github.Ptr(summary.String()),
+			Title:   github.String(fmt.Sprintf("CI %s", conclusion)),
+			Summary: github.String(summary.String()),
 		},
 	})
 	if err != nil {
