@@ -1,0 +1,15 @@
+# Local development values (minikube)
+temporal:
+  enabled: true
+
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: temporal
+    database: temporal
+
+nodePool:
+  system:
+    enabled: false
+  ciJobs:
+    enabled: false
