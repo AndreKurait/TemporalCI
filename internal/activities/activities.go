@@ -22,6 +22,8 @@ type Activities struct {
 	TemporalWebURL string
 	LogBucket      string
 	AWSRegion      string
+	ClusterRoleARN string
+	SubnetIDs      string
 }
 
 // CloneRepo clones a repository at the given ref.
@@ -45,7 +47,20 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 	var steps []StepConfig
 	if pCfg, err := config.LoadPipelineConfig(dir); err == nil {
 		for _, s := range pCfg.Steps {
-			steps = append(steps, StepConfig{Name: s.Name, Image: s.Image, Command: s.Command, Timeout: s.Timeout, DependsOn: s.DependsOn})
+			steps = append(steps, StepConfig{
+			Name: s.Name, Image: s.Image, Command: s.Command,
+			Timeout: s.Timeout, DependsOn: s.DependsOn, Type: s.Type,
+			Secrets: s.Secrets, Outputs: s.Outputs,
+		})
+		if s.Resources != nil {
+			steps[len(steps)-1].Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
+		}
+		if s.Helm != nil {
+			steps[len(steps)-1].Helm = &HelmConfig{
+				Chart: s.Helm.Chart, Values: s.Helm.Values,
+				TestCommand: s.Helm.TestCommand, ClusterPool: s.Helm.ClusterPool, ClusterTTL: s.Helm.ClusterTTL,
+			}
+		}
 		}
 	}
 
@@ -60,14 +75,26 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 	if a.K8sClient != nil {
 		info := activity.GetInfo(ctx)
 		podName := fmt.Sprintf("ci-%s-%s", input.Name, info.ActivityID)
-		result, err := k8s.RunPod(ctx, a.K8sClient, k8s.PodSpec{
-			Name:       podName,
-			Namespace:  "temporalci",
-			Image:      input.Image,
-			Command:    []string{"sh", "-c", input.Command},
-			WorkingDir: input.Dir,
+		spec := k8s.PodSpec{
+			Name:        podName,
+			Namespace:   "temporalci",
+			Image:       input.Image,
+			Command:     []string{"sh", "-c", input.Command},
 			Tolerations: []string{"ci-jobs"},
-		})
+		}
+		if input.Repo != "" {
+			branch := strings.TrimPrefix(input.Ref, "refs/heads/")
+			branch = strings.TrimPrefix(branch, "refs/tags/")
+			spec.CloneURL = fmt.Sprintf("https://github.com/%s.git", input.Repo)
+			spec.CloneRef = branch
+		} else {
+			spec.WorkingDir = input.Dir
+		}
+		if input.Resources != nil {
+			spec.CPU = input.Resources.CPU
+			spec.Memory = input.Resources.Memory
+		}
+		result, err := k8s.RunPod(ctx, a.K8sClient, spec)
 		if err != nil {
 			return RunStepResult{}, fmt.Errorf("k8s pod: %w", err)
 		}

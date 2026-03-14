@@ -7,6 +7,7 @@ import (
 	"io"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -21,6 +22,11 @@ type PodSpec struct {
 	WorkingDir  string
 	Env         map[string]string
 	Tolerations []string
+	CPU         string
+	Memory      string
+	// Clone config: if set, an init container clones the repo
+	CloneURL string
+	CloneRef string
 }
 
 // PodResult captures the outcome of a pod execution.
@@ -73,16 +79,69 @@ func buildPod(spec PodSpec) *corev1.Pod {
 		Env:        envVars,
 	}
 
+	// Resource limits
+	if spec.CPU != "" || spec.Memory != "" {
+		container.Resources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{},
+			Limits:   corev1.ResourceList{},
+		}
+		if spec.CPU != "" {
+			q := resource.MustParse(spec.CPU)
+			container.Resources.Requests[corev1.ResourceCPU] = q
+			container.Resources.Limits[corev1.ResourceCPU] = q
+		}
+		if spec.Memory != "" {
+			q := resource.MustParse(spec.Memory)
+			container.Resources.Requests[corev1.ResourceMemory] = q
+			container.Resources.Limits[corev1.ResourceMemory] = q
+		}
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      spec.Name,
 			Namespace: spec.Namespace,
+			Labels:    map[string]string{"app": "temporalci-ci-job"},
 		},
 		Spec: corev1.PodSpec{
 			Containers:    []corev1.Container{container},
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
+
+	// If clone config is set, add init container and shared volume
+	if spec.CloneURL != "" {
+		workspaceVol := corev1.Volume{
+			Name: "workspace",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}
+		pod.Spec.Volumes = append(pod.Spec.Volumes, workspaceVol)
+
+		mount := corev1.VolumeMount{Name: "workspace", MountPath: "/workspace"}
+		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, mount)
+		pod.Spec.Containers[0].WorkingDir = "/workspace"
+
+		pod.Spec.InitContainers = []corev1.Container{{
+			Name:         "clone",
+			Image:        "alpine/git:latest",
+			Command:      []string{"git", "clone", "--depth=1", "--branch", spec.CloneRef, spec.CloneURL, "/workspace"},
+			VolumeMounts: []corev1.VolumeMount{mount},
+		}}
+	}
+
+	// Go module cache volume
+	cacheVol := corev1.Volume{
+		Name: "go-cache",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	}
+	pod.Spec.Volumes = append(pod.Spec.Volumes, cacheVol)
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts,
+		corev1.VolumeMount{Name: "go-cache", MountPath: "/go/pkg/mod"},
+	)
 
 	for _, t := range spec.Tolerations {
 		if t == "ci-jobs" {
@@ -91,6 +150,7 @@ func buildPod(spec PodSpec) *corev1.Pod {
 				Operator: corev1.TolerationOpExists,
 				Effect:   corev1.TaintEffectNoSchedule,
 			})
+			pod.Spec.NodeSelector = map[string]string{"node-pool": "ci-jobs"}
 		}
 	}
 
