@@ -27,7 +27,8 @@ func main() {
 	w.RegisterWorkflow(workflows.CIPipeline)
 
 	acts := &activities.Activities{
-		GitHubToken: cfg.GitHubToken,
+		GitHubToken:    cfg.GitHubToken,
+		TemporalWebURL: cfg.TemporalWebURL,
 	}
 	w.RegisterActivity(acts)
 

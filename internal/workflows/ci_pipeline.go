@@ -155,6 +155,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	})
 	_ = workflow.ExecuteActivity(disconnectedReportCtx, acts.ReportResults, activities.ReportInput{
 		Repo: input.Repo, HeadSHA: input.HeadSHA, PRNumber: input.PRNumber, Steps: results,
+		WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 	}).Get(disconnectedCtx, nil)
 
 	// 6. Cleanup clone directory

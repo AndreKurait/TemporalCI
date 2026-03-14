@@ -37,6 +37,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "ok")
 	})
+	http.HandleFunc("/status", handleStatus)
 
 	log.Printf("Starting webhook server on :%s", cfg.WebhookPort)
 	if err := http.ListenAndServe(":"+cfg.WebhookPort, nil); err != nil {
@@ -165,6 +166,15 @@ func parseEvent(event string, body []byte) (workflows.CIPipelineInput, error) {
 	}
 
 	return input, nil
+}
+
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	resp := map[string]interface{}{
+		"service": "TemporalCI",
+		"status":  "healthy",
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 func verifySignature(payload []byte, signature, secret string) bool {

@@ -26,6 +26,8 @@ spec:
           env:
             - name: TEMPORAL_HOST_PORT
               value: "{{ .Release.Name }}-frontend:7233"
+            - name: TEMPORAL_WEB_URL
+              value: "{{ .Values.worker.temporalWebURL | default "" }}"
             {{- if .Values.secrets.local.enabled }}
             - name: GITHUB_TOKEN
               valueFrom:

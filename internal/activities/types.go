@@ -49,10 +49,11 @@ type StepResult struct {
 
 // ReportInput defines the input for the ReportResults activity.
 type ReportInput struct {
-	Repo     string       `json:"repo"`
-	HeadSHA  string       `json:"headSHA"`
-	PRNumber int          `json:"prNumber"`
-	Steps    []StepResult `json:"steps"`
+	Repo       string       `json:"repo"`
+	HeadSHA    string       `json:"headSHA"`
+	PRNumber   int          `json:"prNumber"`
+	Steps      []StepResult `json:"steps"`
+	WorkflowID string       `json:"workflowID"`
 }
 
 // StatusInput defines the input for the SetCommitStatus activity.
