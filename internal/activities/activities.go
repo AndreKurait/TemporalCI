@@ -213,6 +213,9 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		if totalDuration > 0.1 {
 			fmt.Fprintf(&body, "**%d passed**, **%d failed** in **%.1fs**\n", passed, failed, totalDuration)
 		}
+		if a.TemporalWebURL != "" && input.WorkflowID != "" {
+			fmt.Fprintf(&body, "\n🔗 [View workflow run](%s/namespaces/default/workflows/%s)\n", a.TemporalWebURL, input.WorkflowID)
+		}
 		if details.Len() > 0 {
 			fmt.Fprintf(&body, "\n### Step Logs\n%s", details.String())
 		}

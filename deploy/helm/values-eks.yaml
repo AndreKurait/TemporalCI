@@ -29,6 +29,10 @@ webhook:
 temporal:
   enabled: true
   cassandra:
+
+temporalWeb:
+  loadBalancer:
+    enabled: true
     enabled: false
   elasticsearch:
     enabled: false
