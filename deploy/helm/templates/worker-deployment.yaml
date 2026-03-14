@@ -24,6 +24,6 @@ spec:
           command: ["/usr/local/bin/worker"]
           env:
             - name: TEMPORAL_HOST_PORT
-              value: "{{ .Release.Name }}-temporal-frontend:7233"
+              value: "{{ .Release.Name }}-frontend:7233"
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
