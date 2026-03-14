@@ -20,33 +20,17 @@ TemporalCI replaces that with **Temporal workflows** that are:
 
 ## How It Works
 
-```
-GitHub push/PR event
-       │
-       ▼
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Webhook    │────▶│  Temporal Server  │────▶│     Worker      │
-│   Server     │     │                  │     │                 │
-└─────────────┘     └──────────────────┘     └────────┬────────┘
-                                                       │
-                                              ┌────────▼────────┐
-                                              │  CIPipeline      │
-                                              │  Workflow         │
-                                              │                  │
-                                              │  1. CloneRepo    │
-                                              │  2. RunStep (×N) │
-                                              │  3. ReportResults│
-                                              └────────┬────────┘
-                                                       │
-                                              ┌────────▼────────┐
-                                              │  CI Job Pods     │
-                                              │  (K8s)           │
-                                              └────────┬────────┘
-                                                       │
-                                              ┌────────▼────────┐
-                                              │  GitHub Check    │
-                                              │  Run + PR Comment│
-                                              └─────────────────┘
+```mermaid
+flowchart LR
+    GH["GitHub push/PR"] --> WH["Webhook Server"]
+    WH --> TS["Temporal Server"]
+    TS --> W["Worker"]
+    W --> WF["CIPipeline Workflow"]
+    WF --> C["1. CloneRepo"]
+    WF --> R["2. RunStep ×N"]
+    WF --> RP["3. ReportResults"]
+    R --> P["CI Job Pods\n(K8s)"]
+    RP --> CR["GitHub Check Run\n+ PR Comment"]
 ```
 
 1. **Webhook server** receives GitHub `push` / `pull_request` events, validates signatures, and starts a Temporal workflow
@@ -167,69 +151,48 @@ This runs Build, Test, and Vet as parallel jobs with JUnit XML test reporting.
 
 ### CI Pipeline Flow
 
-```
-CIPipeline Workflow
-  │
-  ├── CloneRepo activity
-  │     └── git clone --depth=1 into working directory
-  │
-  ├── RunStep activity (for each step in .temporalci.yaml)
-  │     ├── K8s mode: creates a Pod on ci-jobs NodePool
-  │     │     ├── Runs command in specified Docker image
-  │     │     ├── Streams logs via K8s log API
-  │     │     └── Collects exit code + JUnit XML
-  │     └── Local mode: runs command via sh -c (no K8s required)
-  │
-  ├── UploadLog activity (production)
-  │     └── Uploads full log to S3, returns presigned URL
-  │
-  └── ReportResults activity
-        ├── Creates GitHub Check Run (pass/fail with summary)
-        └── Posts PR comment with step-by-step results table
+```mermaid
+flowchart TD
+    WF["CIPipeline Workflow"] --> Clone["CloneRepo\ngit clone --depth=1"]
+    Clone --> Step1["RunStep: build"]
+    Step1 --> Step2["RunStep: test"]
+    Step2 --> StepN["RunStep: ..."]
+    StepN --> Upload["UploadLog\nS3 + presigned URL"]
+    Upload --> Report["ReportResults\nGitHub Check Run + PR comment"]
+
+    subgraph "RunStep (K8s mode)"
+        K1["Create Pod on ci-jobs NodePool"] --> K2["Run command in Docker image"]
+        K2 --> K3["Stream logs via K8s API"]
+        K3 --> K4["Collect exit code + JUnit XML"]
+    end
+
+    subgraph "RunStep (local mode)"
+        L1["sh -c command"]
+    end
 ```
 
 ---
 
 ## Project Structure
 
-```
-TemporalCI/
-├── cmd/
-│   ├── worker/main.go           # Temporal worker entrypoint
-│   └── webhook/main.go          # GitHub webhook HTTP server
-├── internal/
-│   ├── workflows/
-│   │   ├── ci_pipeline.go       # CIPipeline workflow definition
-│   │   └── types.go             # Input/output types
-│   ├── activities/
-│   │   ├── activities.go        # CloneRepo, RunStep, ReportResults
-│   │   ├── s3.go                # UploadLog (S3 + presigned URLs)
-│   │   └── types.go             # Activity input/output types
-│   ├── k8s/
-│   │   └── pod.go               # K8s pod create/watch/logs/cleanup
-│   ├── junit/
-│   │   └── parser.go            # JUnit XML parser
-│   └── config/
-│       ├── config.go            # App config from env vars
-│       └── pipeline.go          # .temporalci.yaml loader
-├── deploy/
-│   ├── helm/                    # Umbrella Helm chart
-│   │   ├── Chart.yaml           # Temporal + PostgreSQL subcharts
-│   │   ├── values.yaml          # Default values
-│   │   ├── values-local.yaml    # minikube overrides
-│   │   ├── values-prod.yaml.example
-│   │   └── templates/           # K8s manifests
-│   └── terraform/               # EKS cluster bootstrap
-│       ├── eks.tf               # EKS Auto Mode cluster
-│       ├── iam.tf               # IAM roles + Pod Identity
-│       ├── ecr.tf               # Container registry
-│       └── variables.tf
-├── docs/                        # Documentation
-├── .github/workflows/           # CI/CD workflows
-├── Dockerfile                   # Multi-stage Go build
-├── Makefile
-└── go.mod
-```
+| Path | Description |
+|------|-------------|
+| `cmd/worker/main.go` | Temporal worker entrypoint |
+| `cmd/webhook/main.go` | GitHub webhook HTTP server |
+| `internal/workflows/ci_pipeline.go` | CIPipeline workflow definition |
+| `internal/workflows/types.go` | Workflow input/output types |
+| `internal/activities/activities.go` | CloneRepo, RunStep, ReportResults |
+| `internal/activities/s3.go` | UploadLog (S3 + presigned URLs) |
+| `internal/activities/types.go` | Activity input/output types |
+| `internal/k8s/pod.go` | K8s pod create/watch/logs/cleanup |
+| `internal/junit/parser.go` | JUnit XML parser |
+| `internal/config/config.go` | App config from env vars |
+| `internal/config/pipeline.go` | `.temporalci.yaml` loader |
+| `deploy/helm/` | Umbrella Helm chart (Temporal + PostgreSQL subcharts) |
+| `deploy/terraform/` | EKS Auto Mode cluster bootstrap (IAM, ECR, add-ons) |
+| `docs/` | Architecture, production guide, pipeline config reference |
+| `.github/workflows/` | CI, Docker Build, Reusable CI, Terraform Validate/Apply |
+| `Dockerfile` | Multi-stage Go build |
 
 ---
 

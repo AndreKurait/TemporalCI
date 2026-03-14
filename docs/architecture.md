@@ -2,63 +2,47 @@
 
 ## System Overview
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    Kubernetes Cluster                          │
-│                                                               │
-│  ┌──────────────┐    ┌──────────────┐    ┌────────────────┐  │
-│  │   Webhook    │    │   Temporal    │    │    Worker      │  │
-│  │   Server     │───▶│   Server     │◀──▶│                │  │
-│  │              │    │              │    │  Registers:     │  │
-│  │  POST /webhook    │  Workflow    │    │  - CIPipeline   │  │
-│  │  GET  /health│    │  History     │    │  - CloneRepo    │  │
-│  └──────────────┘    │  Task Queues │    │  - RunStep      │  │
-│                      └──────┬───────┘    │  - ReportResults│  │
-│                             │            │  - UploadLog    │  │
-│                      ┌──────▼───────┐    └───────┬────────┘  │
-│                      │  PostgreSQL   │            │           │
-│                      │  (or RDS)     │    ┌───────▼────────┐  │
-│                      └──────────────┘    │  CI Job Pods    │  │
-│                                          │  (ephemeral)    │  │
-│                                          └────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-         │                                         │
-         ▼                                         ▼
-┌─────────────────┐                    ┌─────────────────────┐
-│  GitHub          │                    │  AWS                 │
-│  - Webhooks      │                    │  - S3 (logs)         │
-│  - Check Runs    │                    │  - ECR (images)      │
-│  - PR Comments   │                    │  - Secrets Manager   │
-└─────────────────┘                    └─────────────────────┘
+```mermaid
+graph TB
+    subgraph K8s["Kubernetes Cluster"]
+        WH["Webhook Server\nPOST /webhook\nGET /health"]
+        TS["Temporal Server\nWorkflow History\nTask Queues"]
+        PG["PostgreSQL\n(or RDS)"]
+        WK["Worker\nCIPipeline\nCloneRepo\nRunStep\nReportResults\nUploadLog"]
+        PODS["CI Job Pods\n(ephemeral)"]
+
+        WH -->|start workflow| TS
+        TS <-->|poll & complete| WK
+        TS --> PG
+        WK -->|create pods| PODS
+    end
+
+    GH["GitHub\nWebhooks\nCheck Runs\nPR Comments"]
+    AWS["AWS\nS3 (logs)\nECR (images)\nSecrets Manager"]
+
+    GH -->|events| WH
+    WK -->|report| GH
+    WK -->|upload logs| AWS
 ```
 
 ## Workflow Execution
 
 The `CIPipeline` workflow is the core orchestration unit:
 
-```
-CIPipeline(repo, ref, sha, prNumber)
-│
-├─ 1. CloneRepo
-│     Input:  repo URL + git ref
-│     Action: git clone --depth=1, git checkout
-│     Output: working directory path
-│
-├─ 2. RunStep (for each step in .temporalci.yaml)
-│     Input:  directory, command, image
-│     Action: Create K8s pod → run command → stream logs → collect exit code
-│     Output: exit code, stdout/stderr, JUnit XML (if present)
-│     Retry:  up to 3 attempts, 10-minute timeout per step
-│
-├─ 3. UploadLog (production only)
-│     Input:  log content, workflow ID
-│     Action: Upload to S3, generate presigned URL (1hr)
-│     Output: presigned URL for Check Run details link
-│
-└─ 4. ReportResults
-      Input:  repo, SHA, PR number, step results
-      Action: Create GitHub Check Run + PR comment
-      Output: check run ID
+```mermaid
+flowchart TD
+    Start(["CIPipeline(repo, ref, sha, prNumber)"]) --> Clone
+
+    Clone["1. CloneRepo\nInput: repo URL + git ref\nAction: git clone --depth=1, git checkout\nOutput: working directory path"]
+    Clone --> Step
+
+    Step["2. RunStep (for each step in .temporalci.yaml)\nInput: directory, command, image\nAction: Create K8s pod → run → stream logs → collect exit code\nOutput: exit code, stdout/stderr, JUnit XML\nRetry: up to 3 attempts, 10min timeout"]
+    Step --> Upload
+
+    Upload["3. UploadLog (production only)\nInput: log content, workflow ID\nAction: Upload to S3, generate presigned URL (1hr)\nOutput: presigned URL for Check Run details"]
+    Upload --> Report
+
+    Report["4. ReportResults\nInput: repo, SHA, PR number, step results\nAction: Create GitHub Check Run + PR comment\nOutput: check run ID"]
 ```
 
 Each activity is independently retryable. If the worker crashes mid-pipeline, Temporal replays the workflow from the last completed activity.
@@ -67,12 +51,23 @@ Each activity is independently retryable. If the worker crashes mid-pipeline, Te
 
 When `RunStep` executes in K8s mode:
 
-1. **Create** — Pod created in `temporalci` namespace with specified image and command
-2. **Schedule** — Pod scheduled to `ci-jobs` NodePool (via toleration) for isolation
-3. **Execute** — Container runs the CI command
-4. **Stream** — Logs streamed via K8s pod log API
-5. **Collect** — Exit code extracted from terminated container status
-6. **Cleanup** — Pod deleted (always, even on failure)
+```mermaid
+sequenceDiagram
+    participant W as Worker
+    participant K as K8s API
+    participant P as CI Pod
+
+    W->>K: Create Pod (image, command, ci-jobs toleration)
+    K->>P: Schedule on ci-jobs NodePool
+    P->>P: Execute CI command
+    W->>K: Watch pod status
+    K-->>W: Phase: Succeeded/Failed
+    W->>K: Get pod logs (stream)
+    K-->>W: stdout/stderr
+    W->>K: Get terminated container status
+    K-->>W: exit code
+    W->>K: Delete pod (cleanup)
+```
 
 ## Security Model
 
@@ -86,16 +81,15 @@ When `RunStep` executes in K8s mode:
 
 ## Data Flow
 
-```
-GitHub Event → Webhook Server → Temporal (enqueue) → Worker (dequeue)
-                                                         │
-                                                    Clone repo
-                                                         │
-                                                    Run steps (K8s pods)
-                                                         │
-                                                    Upload logs → S3
-                                                         │
-                                                    Report → GitHub API
+```mermaid
+flowchart LR
+    A["GitHub Event"] --> B["Webhook Server"]
+    B --> C["Temporal\n(enqueue)"]
+    C --> D["Worker\n(dequeue)"]
+    D --> E["Clone repo"]
+    E --> F["Run steps\n(K8s pods)"]
+    F --> G["Upload logs\n→ S3"]
+    G --> H["Report\n→ GitHub API"]
 ```
 
 No CI state is stored in the webhook server or worker — Temporal owns all execution state. Both components are stateless and horizontally scalable.
