@@ -1,0 +1,14 @@
+{{- if .Values.nodePool.ciJobs.enabled }}
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: NodePool
+metadata:
+  name: ci-jobs
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+spec:
+  role: ci-jobs
+  taints:
+    - key: workload
+      value: ci-job
+      effect: NoSchedule
+{{- end }}

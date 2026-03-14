@@ -12,6 +12,10 @@ logs:
 
 secrets:
   prefix: "temporalci"
+  local:
+    enabled: false
+  aws:
+    enabled: true
 
 # In production, PostgreSQL is provided by RDS via ACK
 postgresql:
@@ -20,8 +24,24 @@ postgresql:
 temporal:
   enabled: true
 
+rds:
+  enabled: true
+  instanceClass: "db.t4g.micro"
+  allocatedStorage: 20
+
+s3:
+  enabled: true
+
 nodePool:
   system:
     enabled: true
   ciJobs:
     enabled: true
+
+serviceAccounts:
+  worker:
+    roleArn: "arn:aws:iam::123456789:role/temporalci-worker"
+  webhook:
+    roleArn: "arn:aws:iam::123456789:role/temporalci-webhook"
+  ciJob:
+    roleArn: "arn:aws:iam::123456789:role/temporalci-ci-job"

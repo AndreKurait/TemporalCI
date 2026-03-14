@@ -1,0 +1,18 @@
+{{- if .Values.rds.enabled }}
+apiVersion: rds.services.k8s.aws/v1alpha1
+kind: DBInstance
+metadata:
+  name: {{ .Release.Name }}-db
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+spec:
+  engine: postgres
+  dbInstanceClass: {{ .Values.rds.instanceClass }}
+  allocatedStorage: {{ .Values.rds.allocatedStorage }}
+  dbInstanceIdentifier: {{ .Release.Name }}-db
+  masterUsername: temporal
+  masterUserPassword:
+    namespace: {{ .Release.Namespace }}
+    name: {{ .Release.Name }}-db-password
+    key: password
+{{- end }}

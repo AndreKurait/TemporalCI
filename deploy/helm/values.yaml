@@ -49,9 +49,31 @@ logs:
 
 secrets:
   prefix: temporalci
+  local:
+    enabled: false
+    githubWebhookSecret: ""
+    githubToken: ""
+  aws:
+    enabled: false
+
+rds:
+  enabled: false
+  instanceClass: db.t4g.micro
+  allocatedStorage: 20
+
+s3:
+  enabled: false
 
 nodePool:
   system:
     enabled: false
   ciJobs:
     enabled: false
+
+serviceAccounts:
+  worker:
+    roleArn: ""
+  webhook:
+    roleArn: ""
+  ciJob:
+    roleArn: ""
