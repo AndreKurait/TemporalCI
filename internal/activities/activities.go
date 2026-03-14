@@ -9,6 +9,8 @@ import (
 	"github.com/google/go-github/v67/github"
 	"go.temporal.io/sdk/activity"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/AndreKurait/TemporalCI/internal/k8s"
 )
 
 // Activities holds shared dependencies for all activity methods.
@@ -44,8 +46,23 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 	logger.Info("Running step", "name", input.Name, "image", input.Image)
 
 	if a.K8sClient != nil {
-		// TODO: create K8s pod via internal/k8s package
-		return RunStepResult{ExitCode: 0, Output: "k8s not yet implemented"}, nil
+		info := activity.GetInfo(ctx)
+		podName := fmt.Sprintf("ci-%s-%s", input.Name, info.ActivityID)
+		result, err := k8s.RunPod(ctx, a.K8sClient, k8s.PodSpec{
+			Name:       podName,
+			Namespace:  "temporalci",
+			Image:      input.Image,
+			Command:    []string{"sh", "-c", input.Command},
+			WorkingDir: input.Dir,
+			Tolerations: []string{"ci-jobs"},
+		})
+		if err != nil {
+			return RunStepResult{}, fmt.Errorf("k8s pod: %w", err)
+		}
+		return RunStepResult{
+			ExitCode: result.ExitCode,
+			Output:   result.Logs,
+		}, nil
 	}
 
 	// Local mode fallback: run command directly via shell
