@@ -150,7 +150,6 @@ func buildPod(spec PodSpec) *corev1.Pod {
 				Operator: corev1.TolerationOpExists,
 				Effect:   corev1.TaintEffectNoSchedule,
 			})
-			pod.Spec.NodeSelector = map[string]string{"node-pool": "ci-jobs"}
 		}
 	}
 

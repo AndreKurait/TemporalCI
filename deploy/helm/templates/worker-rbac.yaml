@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-ci-pod-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-ci-pod-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: temporalci-worker
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-ci-pod-manager
+  apiGroup: rbac.authorization.k8s.io
