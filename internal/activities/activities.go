@@ -159,6 +159,8 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 			icon = "❌"
 		} else if s.Status == "skipped" {
 			icon = "⏭️"
+		} else if s.Status == "cancelled" {
+			icon = "🚫"
 		}
 		if s.Duration > 0.1 {
 			fmt.Fprintf(&summary, "%s **%s** (exit %d, %.1fs)\n", icon, s.Name, s.ExitCode, s.Duration)

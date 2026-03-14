@@ -81,7 +81,10 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 			err := f.Get(ctx, &stepResult)
 			duration := workflow.Now(ctx).Sub(starts[i]).Seconds()
 			status := "passed"
-			if err != nil || stepResult.ExitCode != 0 {
+			if temporal.IsCanceledError(err) {
+				status = "cancelled"
+				overallStatus = "cancelled"
+			} else if err != nil || stepResult.ExitCode != 0 {
 				status = "failed"
 				overallStatus = "failed"
 			}
@@ -118,7 +121,10 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 			duration := workflow.Now(ctx).Sub(start).Seconds()
 
 			status := "passed"
-			if err != nil || stepResult.ExitCode != 0 {
+			if temporal.IsCanceledError(err) {
+				status = "cancelled"
+				overallStatus = "cancelled"
+			} else if err != nil || stepResult.ExitCode != 0 {
 				status = "failed"
 				overallStatus = "failed"
 			}
@@ -132,13 +138,18 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		}
 	}
 
-	// 5. Report results
-	_ = workflow.ExecuteActivity(reportCtx, acts.ReportResults, activities.ReportInput{
+	// 5. Report results (use disconnected context to survive cancellation)
+	disconnectedCtx, _ := workflow.NewDisconnectedContext(ctx)
+	disconnectedReportCtx := workflow.WithActivityOptions(disconnectedCtx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+	_ = workflow.ExecuteActivity(disconnectedReportCtx, acts.ReportResults, activities.ReportInput{
 		Repo: input.Repo, HeadSHA: input.HeadSHA, PRNumber: input.PRNumber, Steps: results,
-	}).Get(ctx, nil)
+	}).Get(disconnectedCtx, nil)
 
 	// 6. Cleanup clone directory
-	_ = workflow.ExecuteActivity(reportCtx, acts.Cleanup, cloneResult.Dir).Get(ctx, nil)
+	_ = workflow.ExecuteActivity(disconnectedReportCtx, acts.Cleanup, cloneResult.Dir).Get(disconnectedCtx, nil)
 
 	return CIPipelineResult{Status: overallStatus, Steps: results}, nil
 }
