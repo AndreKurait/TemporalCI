@@ -30,7 +30,7 @@ spec:
             - name: PORT
               value: {{ .Values.webhook.port | quote }}
             - name: TEMPORAL_HOST_PORT
-              value: "{{ .Release.Name }}-temporal-frontend:7233"
+              value: "{{ .Release.Name }}-frontend:7233"
           livenessProbe:
             httpGet:
               path: /health
