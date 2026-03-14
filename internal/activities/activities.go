@@ -95,7 +95,7 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 	}, nil
 }
 
-// ReportResults reports CI results back to GitHub as a Check Run.
+// ReportResults reports CI results back to GitHub via commit status and PR comments.
 func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Reporting results", "repo", input.Repo, "sha", input.HeadSHA, "steps", len(input.Steps))
@@ -112,16 +112,16 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 	}
 	owner, repo := parts[0], parts[1]
 
-	// Determine conclusion from step results
-	conclusion := "success"
+	// Determine overall state
+	state := "success"
 	for _, s := range input.Steps {
 		if s.Status == "failed" {
-			conclusion = "failure"
+			state = "failure"
 			break
 		}
 	}
 
-	// Build summary
+	// Build description
 	var summary strings.Builder
 	for _, s := range input.Steps {
 		icon := "✅"
@@ -131,31 +131,32 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		fmt.Fprintf(&summary, "%s **%s** (exit %d)\n", icon, s.Name, s.ExitCode)
 	}
 
-	status := "completed"
-	checkRun, _, err := gh.Checks.CreateCheckRun(ctx, owner, repo, github.CreateCheckRunOptions{
-		Name:       "TemporalCI",
-		HeadSHA:    input.HeadSHA,
-		Status:     &status,
-		Conclusion: &conclusion,
-		Output: &github.CheckRunOutput{
-			Title:   github.String(fmt.Sprintf("CI %s", conclusion)),
-			Summary: github.String(summary.String()),
-		},
+	// Create commit status (works with PATs, unlike Check Runs)
+	description := fmt.Sprintf("CI %s (%d steps)", state, len(input.Steps))
+	if len(description) > 140 {
+		description = description[:140]
+	}
+	ciContext := "TemporalCI"
+	_, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, &github.RepoStatus{
+		State:       &state,
+		Description: &description,
+		Context:     &ciContext,
 	})
 	if err != nil {
-		return fmt.Errorf("create check run: %w", err)
+		return fmt.Errorf("create commit status: %w", err)
 	}
-	logger.Info("Created check run", "id", checkRun.GetID())
+	logger.Info("Created commit status", "state", state)
 
 	// Post PR comment if this is a pull request
 	if input.PRNumber > 0 {
-		body := fmt.Sprintf("## TemporalCI Results\n\n%s\n\nConclusion: **%s**", summary.String(), conclusion)
+		body := fmt.Sprintf("## TemporalCI Results\n\n%s\nConclusion: **%s**", summary.String(), state)
 		_, _, err := gh.Issues.CreateComment(ctx, owner, repo, input.PRNumber, &github.IssueComment{
 			Body: &body,
 		})
 		if err != nil {
 			return fmt.Errorf("create PR comment: %w", err)
 		}
+		logger.Info("Posted PR comment", "pr", input.PRNumber)
 	}
 
 	return nil

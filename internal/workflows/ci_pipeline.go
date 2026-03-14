@@ -74,8 +74,12 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		}
 	}
 
-	// 4. Report results
-	_ = workflow.ExecuteActivity(ctx, acts.ReportResults, activities.ReportInput{
+	// 4. Report results (best-effort, no retries)
+	reportCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
+	_ = workflow.ExecuteActivity(reportCtx, acts.ReportResults, activities.ReportInput{
 		Repo:     input.Repo,
 		HeadSHA:  input.HeadSHA,
 		PRNumber: input.PRNumber,
