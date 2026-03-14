@@ -10,3 +10,35 @@ type CloneInput struct {
 type CloneResult struct {
 	Dir string `json:"dir"`
 }
+
+// RunStepInput defines the input for the RunStep activity.
+type RunStepInput struct {
+	Dir     string `json:"dir"`
+	Command string `json:"command"`
+	Name    string `json:"name"`
+	Image   string `json:"image"`
+}
+
+// RunStepResult defines the output of the RunStep activity.
+type RunStepResult struct {
+	ExitCode int    `json:"exitCode"`
+	Output   string `json:"output"`
+	JUnitXML string `json:"junitXML,omitempty"`
+}
+
+// StepResult captures the result of a single CI step (used in reporting).
+type StepResult struct {
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+	Output   string `json:"output"`
+	ExitCode int    `json:"exitCode"`
+	JUnitXML string `json:"junitXML,omitempty"`
+}
+
+// ReportInput defines the input for the ReportResults activity.
+type ReportInput struct {
+	Repo     string       `json:"repo"`
+	HeadSHA  string       `json:"headSHA"`
+	PRNumber int          `json:"prNumber"`
+	Steps    []StepResult `json:"steps"`
+}
