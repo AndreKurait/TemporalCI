@@ -72,7 +72,7 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 		}
 		return RunStepResult{
 			ExitCode: result.ExitCode,
-			Output:   result.Logs,
+			Output:   truncateOutput(result.Logs, 4000),
 		}, nil
 	}
 
@@ -91,8 +91,21 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 
 	return RunStepResult{
 		ExitCode: exitCode,
-		Output:   string(out),
+		Output:   truncateOutput(string(out), 4000),
 	}, nil
+}
+
+// Cleanup removes the clone directory after a workflow completes.
+func (a *Activities) Cleanup(ctx context.Context, dir string) error {
+	return os.RemoveAll(dir)
+}
+
+// truncateOutput keeps the last maxLen bytes, prepending a truncation notice.
+func truncateOutput(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return "... (truncated)\n" + s[len(s)-maxLen:]
 }
 
 // SetCommitStatus sets a commit status on GitHub (pending, success, failure).
@@ -144,6 +157,8 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		icon := "✅"
 		if s.Status == "failed" {
 			icon = "❌"
+		} else if s.Status == "skipped" {
+			icon = "⏭️"
 		}
 		if s.Duration > 0.1 {
 			fmt.Fprintf(&summary, "%s **%s** (exit %d, %.1fs)\n", icon, s.Name, s.ExitCode, s.Duration)
