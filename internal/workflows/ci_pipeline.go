@@ -62,6 +62,43 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	results := make([]activities.StepResult, len(steps))
 	overallStatus := "passed"
 
+	makeInput := func(step activities.StepConfig) activities.RunStepInput {
+		in := activities.RunStepInput{
+			Dir: cloneResult.Dir, Command: step.Command,
+			Name: step.Name, Image: step.Image,
+			Repo: input.Repo, Ref: input.Ref,
+		}
+		if step.Resources != nil {
+			in.Resources = step.Resources
+		}
+		return in
+	}
+
+	// Helper to run a single step (regular or helm-test)
+	runStep := func(stepCtx workflow.Context, step activities.StepConfig) (activities.RunStepResult, error) {
+		if step.Type == "helm-test" && step.Helm != nil {
+			// Run as child workflow
+			childOpts := workflow.ChildWorkflowOptions{
+				WorkflowID: fmt.Sprintf("%s-helm-%s", workflow.GetInfo(ctx).WorkflowExecution.ID, step.Name),
+			}
+			childCtx := workflow.WithChildOptions(stepCtx, childOpts)
+			var helmResult HelmTestPipelineResult
+			err := workflow.ExecuteChildWorkflow(childCtx, HelmTestPipeline, HelmTestPipelineInput{
+				Repo: input.Repo, Ref: input.Ref, Dir: cloneResult.Dir,
+				Chart: step.Helm.Chart, Values: step.Helm.Values,
+				ReleaseName: step.Name, TestCommand: step.Helm.TestCommand,
+				ClusterPool: step.Helm.ClusterPool, ClusterTTL: step.Helm.ClusterTTL,
+			}).Get(childCtx, &helmResult)
+			return activities.RunStepResult{
+				ExitCode: helmResult.ExitCode,
+				Output:   helmResult.Output,
+			}, err
+		}
+		var result activities.RunStepResult
+		err := workflow.ExecuteActivity(stepCtx, acts.RunStep, makeInput(step)).Get(stepCtx, &result)
+		return result, err
+	}
+
 	hasDepends := false
 	for _, s := range steps {
 		if len(s.DependsOn) > 0 {
@@ -80,9 +117,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 				StartToCloseTimeout: parseTimeout(step.Timeout, 10*time.Minute),
 				RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 			})
-			futures[i] = workflow.ExecuteActivity(stepCtx, acts.RunStep, activities.RunStepInput{
-				Dir: cloneResult.Dir, Command: step.Command, Name: step.Name, Image: step.Image,
-			})
+			futures[i] = workflow.ExecuteActivity(stepCtx, acts.RunStep, makeInput(step))
 		}
 		for i, f := range futures {
 			var stepResult activities.RunStepResult
@@ -123,9 +158,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 				RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 			})
 			var stepResult activities.RunStepResult
-			err := workflow.ExecuteActivity(stepCtx, acts.RunStep, activities.RunStepInput{
-				Dir: cloneResult.Dir, Command: step.Command, Name: step.Name, Image: step.Image,
-			}).Get(ctx, &stepResult)
+			err := workflow.ExecuteActivity(stepCtx, acts.RunStep, makeInput(step)).Get(ctx, &stepResult)
 			duration := workflow.Now(ctx).Sub(start).Seconds()
 
 			status := "passed"
