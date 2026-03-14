@@ -17,10 +17,11 @@ spec:
         {{- include "temporalci.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: webhook
     spec:
+      serviceAccountName: temporalci-webhook
       containers:
         - name: webhook
           image: "{{ .Values.image.registry }}{{ if .Values.image.registry }}/{{ end }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          imagePullPolicy: Always
           command: ["/usr/local/bin/webhook"]
           ports:
             - name: http
@@ -31,6 +32,13 @@ spec:
               value: {{ .Values.webhook.port | quote }}
             - name: TEMPORAL_HOST_PORT
               value: "{{ .Release.Name }}-frontend:7233"
+            {{- if .Values.secrets.local.enabled }}
+            - name: GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: github-webhook-secret
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health

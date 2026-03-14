@@ -1,24 +1,29 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // Config holds all application configuration.
 type Config struct {
-	TemporalHostPort   string
-	WebhookPort        string
+	TemporalHostPort    string
+	WebhookPort         string
 	GitHubWebhookSecret string
-	LogBucket          string
-	AWSRegion          string
+	GitHubToken         string
+	LogBucket           string
+	AWSRegion           string
 }
 
 // LoadConfig reads configuration from environment variables.
 func LoadConfig() Config {
 	return Config{
-		TemporalHostPort:   getEnv("TEMPORAL_HOST_PORT", "localhost:7233"),
-		WebhookPort:        getEnv("PORT", "8080"),
+		TemporalHostPort:    getEnv("TEMPORAL_HOST_PORT", "localhost:7233"),
+		WebhookPort:         getEnv("PORT", "8080"),
 		GitHubWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
-		LogBucket:          os.Getenv("LOG_BUCKET"),
-		AWSRegion:          getEnv("AWS_REGION", "us-east-1"),
+		GitHubToken:         getEnvOrFile("GITHUB_TOKEN", "/etc/temporalci/github-token"),
+		LogBucket:           os.Getenv("LOG_BUCKET"),
+		AWSRegion:           getEnv("AWS_REGION", "us-east-1"),
 	}
 }
 
@@ -27,4 +32,14 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvOrFile(envKey, filePath string) string {
+	if v := os.Getenv(envKey); v != "" {
+		return v
+	}
+	if data, err := os.ReadFile(filePath); err == nil {
+		return strings.TrimSpace(string(data))
+	}
+	return ""
 }

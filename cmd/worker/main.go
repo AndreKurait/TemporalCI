@@ -26,7 +26,9 @@ func main() {
 
 	w.RegisterWorkflow(workflows.CIPipeline)
 
-	acts := &activities.Activities{}
+	acts := &activities.Activities{
+		GitHubToken: cfg.GitHubToken,
+	}
 	w.RegisterActivity(acts)
 
 	log.Printf("Starting worker on task queue %q, Temporal at %s", taskQueue, cfg.TemporalHostPort)

@@ -2,13 +2,22 @@ package activities
 
 // CloneInput defines the input for the CloneRepo activity.
 type CloneInput struct {
-	Repo string `json:"repo"`
-	Ref  string `json:"ref"`
+	Repo       string `json:"repo"`
+	Ref        string `json:"ref"`
+	WorkflowID string `json:"workflowID"`
 }
 
 // CloneResult defines the output of the CloneRepo activity.
 type CloneResult struct {
-	Dir string `json:"dir"`
+	Dir   string       `json:"dir"`
+	Steps []StepConfig `json:"steps,omitempty"`
+}
+
+// StepConfig mirrors config.StepConfig for serialization across activity boundary.
+type StepConfig struct {
+	Name    string `json:"name"`
+	Image   string `json:"image"`
+	Command string `json:"command"`
 }
 
 // RunStepInput defines the input for the RunStep activity.

@@ -1,4 +1,16 @@
-# Local development values (minikube)
+# Local development values (minikube/kind)
+image:
+  registry: ""
+  repository: temporalci
+  tag: latest
+  pullPolicy: Never
+
+worker:
+  replicas: 1
+
+webhook:
+  replicas: 1
+
 temporal:
   enabled: true
 
@@ -9,21 +21,10 @@ postgresql:
     database: temporal
 
 secrets:
+  prefix: temporalci
   local:
     enabled: true
     githubWebhookSecret: dev-secret
     githubToken: ""
   aws:
-    enabled: false
-
-rds:
-  enabled: false
-
-s3:
-  enabled: false
-
-nodePool:
-  system:
-    enabled: false
-  ciJobs:
     enabled: false
