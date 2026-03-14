@@ -44,7 +44,7 @@ resource "aws_eks_cluster" "this" {
 
 resource "aws_eks_addon" "secrets_store_csi" {
   cluster_name = aws_eks_cluster.this.name
-  addon_name   = "secrets-store-csi-driver-provider-aws"
+  addon_name   = "aws-secrets-store-csi-driver-provider"
 
   depends_on = [aws_eks_cluster.this]
 }
@@ -52,6 +52,10 @@ resource "aws_eks_addon" "secrets_store_csi" {
 resource "aws_eks_addon" "cloudwatch_observability" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "amazon-cloudwatch-observability"
+
+  timeouts {
+    create = "30m"
+  }
 
   depends_on = [aws_eks_cluster.this]
 }
