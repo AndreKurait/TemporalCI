@@ -25,6 +25,12 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 
+	// Query handler for CI status
+	currentStatus := "cloning"
+	_ = workflow.SetQueryHandler(ctx, "status", func() (string, error) {
+		return currentStatus, nil
+	})
+
 	// 1. Clone repo
 	var cloneResult activities.CloneResult
 	err := workflow.ExecuteActivity(ctx, acts.CloneRepo, activities.CloneInput{
@@ -37,6 +43,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	}
 
 	// 2. Set pending commit status
+	currentStatus = "pending"
 	_ = workflow.ExecuteActivity(reportCtx, acts.SetCommitStatus, activities.StatusInput{
 		Repo: input.Repo, HeadSHA: input.HeadSHA,
 		State: "pending", Description: "CI running...",
@@ -51,6 +58,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	}
 
 	// 4. Run steps
+	currentStatus = "running"
 	results := make([]activities.StepResult, len(steps))
 	overallStatus := "passed"
 
@@ -139,6 +147,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	}
 
 	// 5. Report results (use disconnected context to survive cancellation)
+	currentStatus = "reporting"
 	disconnectedCtx, _ := workflow.NewDisconnectedContext(ctx)
 	disconnectedReportCtx := workflow.WithActivityOptions(disconnectedCtx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
