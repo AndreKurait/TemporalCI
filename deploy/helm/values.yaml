@@ -30,6 +30,10 @@ webhook:
 temporal:
   enabled: true
   server:
+
+temporalWeb:
+  loadBalancer:
+    enabled: false
     config:
       persistence:
         default:
