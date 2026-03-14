@@ -1,0 +1,27 @@
+# Production values example - fill in with your environment-specific values
+# NEVER commit real values to the repo
+
+image:
+  registry: "123456789.dkr.ecr.us-east-1.amazonaws.com"
+
+aws:
+  region: "us-east-1"
+
+logs:
+  s3Bucket: "my-temporalci-logs"
+
+secrets:
+  prefix: "temporalci"
+
+# In production, PostgreSQL is provided by RDS via ACK
+postgresql:
+  enabled: false
+
+temporal:
+  enabled: true
+
+nodePool:
+  system:
+    enabled: true
+  ciJobs:
+    enabled: true
