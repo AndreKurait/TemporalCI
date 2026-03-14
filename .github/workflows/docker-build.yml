@@ -7,6 +7,7 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    if: ${{ vars.SKIP_DOCKER != 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -22,8 +23,10 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
         run: |
-          IMAGE=${{ secrets.ECR_REGISTRY }}/temporalci
-          docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
-          docker push $IMAGE:${{ github.sha }}
-          docker push $IMAGE:latest
+          IMAGE="${ECR_REGISTRY}/temporalci"
+          docker build -t "${IMAGE}:${GITHUB_SHA}" -t "${IMAGE}:latest" .
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE}:latest"
