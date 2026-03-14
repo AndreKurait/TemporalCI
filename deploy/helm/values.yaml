@@ -41,12 +41,6 @@ postgresql:
     postgresPassword: temporal
     database: temporal
 
-aws:
-  region: ""
-
-logs:
-  s3Bucket: ""
-
 secrets:
   prefix: temporalci
   local:
@@ -54,20 +48,6 @@ secrets:
     githubWebhookSecret: ""
     githubToken: ""
   aws:
-    enabled: false
-
-rds:
-  enabled: false
-  instanceClass: db.t4g.micro
-  allocatedStorage: 20
-
-s3:
-  enabled: false
-
-nodePool:
-  system:
-    enabled: false
-  ciJobs:
     enabled: false
 
 serviceAccounts:

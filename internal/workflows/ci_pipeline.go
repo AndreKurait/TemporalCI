@@ -8,20 +8,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/AndreKurait/TemporalCI/internal/activities"
+	"github.com/AndreKurait/TemporalCI/internal/config"
 )
-
-// PipelineStep defines a single step in the CI pipeline config.
-type PipelineStep struct {
-	Name    string `json:"name"`
-	Command string `json:"command"`
-	Image   string `json:"image"`
-}
-
-// DefaultPipeline is used when no .temporalci.yaml is found.
-var DefaultPipeline = []PipelineStep{
-	{Name: "build", Command: "go build ./...", Image: "golang:1.23"},
-	{Name: "test", Command: "go test ./...", Image: "golang:1.23"},
-}
 
 // CIPipeline is the main CI workflow.
 func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, error) {
@@ -38,15 +26,23 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	// 1. Clone repo
 	var cloneResult activities.CloneResult
 	err := workflow.ExecuteActivity(ctx, acts.CloneRepo, activities.CloneInput{
-		Repo: input.Repo,
-		Ref:  input.Ref,
+		Repo:       input.Repo,
+		Ref:        input.Ref,
+		WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 	}).Get(ctx, &cloneResult)
 	if err != nil {
 		return CIPipelineResult{Status: "failed"}, fmt.Errorf("clone: %w", err)
 	}
 
-	// 2. Run each step
-	steps := DefaultPipeline
+	// 2. Load pipeline config from clone result, fall back to default
+	steps := cloneResult.Steps
+	if len(steps) == 0 {
+		for _, s := range config.DefaultConfig().Steps {
+			steps = append(steps, activities.StepConfig{Name: s.Name, Image: s.Image, Command: s.Command})
+		}
+	}
+
+	// 3. Run each step
 	var results []activities.StepResult
 	overallStatus := "passed"
 
@@ -78,7 +74,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		}
 	}
 
-	// 3. Report results
+	// 4. Report results
 	_ = workflow.ExecuteActivity(ctx, acts.ReportResults, activities.ReportInput{
 		Repo:     input.Repo,
 		HeadSHA:  input.HeadSHA,

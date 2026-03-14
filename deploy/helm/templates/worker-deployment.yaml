@@ -17,13 +17,21 @@ spec:
         {{- include "temporalci.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: ci-worker
     spec:
+      serviceAccountName: temporalci-worker
       containers:
         - name: worker
           image: "{{ .Values.image.registry }}{{ if .Values.image.registry }}/{{ end }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          imagePullPolicy: Always
           command: ["/usr/local/bin/worker"]
           env:
             - name: TEMPORAL_HOST_PORT
               value: "{{ .Release.Name }}-frontend:7233"
+            {{- if .Values.secrets.local.enabled }}
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: github-token
+            {{- end }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}

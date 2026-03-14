@@ -11,6 +11,7 @@ import (
 	"go.temporal.io/sdk/activity"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/AndreKurait/TemporalCI/internal/config"
 	"github.com/AndreKurait/TemporalCI/internal/k8s"
 )
 
@@ -27,7 +28,7 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 	logger := activity.GetLogger(ctx)
 	logger.Info("Cloning repo", "repo", input.Repo, "ref", input.Ref)
 
-	dir := fmt.Sprintf("/tmp/ci/%s/%s", input.Repo, input.Ref)
+	dir := fmt.Sprintf("/tmp/ci/%s", input.WorkflowID)
 
 	// Clean up any previous clone
 	_ = os.RemoveAll(dir)
@@ -39,7 +40,15 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 		return CloneResult{}, fmt.Errorf("git clone: %w", err)
 	}
 
-	return CloneResult{Dir: dir}, nil
+	// Load pipeline config from cloned repo
+	var steps []StepConfig
+	if pCfg, err := config.LoadPipelineConfig(dir); err == nil {
+		for _, s := range pCfg.Steps {
+			steps = append(steps, StepConfig{Name: s.Name, Image: s.Image, Command: s.Command})
+		}
+	}
+
+	return CloneResult{Dir: dir, Steps: steps}, nil
 }
 
 // RunStep executes a single CI step in a K8s pod, or locally if K8sClient is nil.
