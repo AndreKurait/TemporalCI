@@ -137,3 +137,15 @@ type HelmTestResult struct {
 	ExitCode int    `json:"exitCode"`
 	Output   string `json:"output"`
 }
+
+// UploadLogInput defines the input for the UploadLog activity.
+type UploadLogInput struct {
+	WorkflowID string `json:"workflowID"`
+	ActivityID string `json:"activityID"`
+	Content    string `json:"content"`
+}
+
+// UploadLogResult defines the output of the UploadLog activity.
+type UploadLogResult struct {
+	URL string `json:"url"`
+}
