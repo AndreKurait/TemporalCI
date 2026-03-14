@@ -137,6 +137,9 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		Repo: input.Repo, HeadSHA: input.HeadSHA, PRNumber: input.PRNumber, Steps: results,
 	}).Get(ctx, nil)
 
+	// 6. Cleanup clone directory
+	_ = workflow.ExecuteActivity(reportCtx, acts.Cleanup, cloneResult.Dir).Get(ctx, nil)
+
 	return CIPipelineResult{Status: overallStatus, Steps: results}, nil
 }
 

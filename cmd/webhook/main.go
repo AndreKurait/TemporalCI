@@ -67,6 +67,11 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	event := r.Header.Get("X-GitHub-Event")
+	if event == "ping" {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"status":"pong"}`)
+		return
+	}
 	if event != "push" && event != "pull_request" {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, `{"status":"ignored","event":%q}`, event)
@@ -84,7 +89,11 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workflowID := fmt.Sprintf("ci-%s-%s-%s", input.Repo, input.HeadSHA[:8], event)
+	workflowID := fmt.Sprintf("ci-%s-%s-%s", input.Repo, input.Ref, event)
+
+	// Cancel any previous run for this branch+event
+	_ = temporalClient.CancelWorkflow(r.Context(), workflowID, "")
+
 	opts := client.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: taskQueue,
