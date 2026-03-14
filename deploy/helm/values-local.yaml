@@ -8,6 +8,20 @@ postgresql:
     postgresPassword: temporal
     database: temporal
 
+secrets:
+  local:
+    enabled: true
+    githubWebhookSecret: dev-secret
+    githubToken: ""
+  aws:
+    enabled: false
+
+rds:
+  enabled: false
+
+s3:
+  enabled: false
+
 nodePool:
   system:
     enabled: false

@@ -1,0 +1,10 @@
+{{- if .Values.s3.enabled }}
+apiVersion: s3.services.k8s.aws/v1alpha1
+kind: Bucket
+metadata:
+  name: {{ .Release.Name }}-logs
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+spec:
+  name: {{ .Values.logs.s3Bucket }}
+{{- end }}
