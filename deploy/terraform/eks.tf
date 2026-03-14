@@ -10,7 +10,7 @@ resource "aws_eks_cluster" "this" {
 
   compute_config {
     enabled       = true
-    node_pools    = ["system", "ci-jobs"]
+    node_pools    = ["general-purpose"]
     node_role_arn = aws_iam_role.eks_node.arn
   }
 
@@ -39,29 +39,8 @@ resource "aws_eks_cluster" "this" {
   ]
 }
 
-resource "aws_eks_node_pool" "system" {
-  cluster_name = aws_eks_cluster.this.name
-  node_pool_name = "system"
-
-  node_role_arn = aws_iam_role.eks_node.arn
-
-  depends_on = [aws_eks_cluster.this]
-}
-
-resource "aws_eks_node_pool" "ci_jobs" {
-  cluster_name   = aws_eks_cluster.this.name
-  node_pool_name = "ci-jobs"
-
-  node_role_arn = aws_iam_role.eks_node.arn
-
-  taint {
-    key    = "workload"
-    value  = "ci-job"
-    effect = "NO_SCHEDULE"
-  }
-
-  depends_on = [aws_eks_cluster.this]
-}
+# Custom NodePools (system, ci-jobs) are managed via Kubernetes NodePool CRD
+# after cluster creation. See deploy/helm/templates/nodepool-*.yaml
 
 resource "aws_eks_addon" "secrets_store_csi" {
   cluster_name = aws_eks_cluster.this.name
