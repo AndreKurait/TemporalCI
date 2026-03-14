@@ -75,7 +75,20 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 
 	if a.K8sClient != nil {
 		info := activity.GetInfo(ctx)
-		podName := fmt.Sprintf("ci-%s-%s", input.Name, info.ActivityID)
+		podName := fmt.Sprintf("ci-%s-%s-%s", input.Name, info.WorkflowExecution.ID, info.ActivityID)
+		// Sanitize pod name (must be DNS-compatible)
+		podName = strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+				return r
+			}
+			if r >= 'A' && r <= 'Z' {
+				return r + 32 // lowercase
+			}
+			return '-'
+		}, podName)
+		if len(podName) > 63 {
+			podName = podName[:63]
+		}
 		spec := k8s.PodSpec{
 			Name:        podName,
 			Namespace:   "temporalci",
