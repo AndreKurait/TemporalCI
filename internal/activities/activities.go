@@ -152,21 +152,37 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		}
 	}
 
-	// Build description
+	// Build summary line and detailed sections
 	var summary strings.Builder
+	var details strings.Builder
+	var totalDuration float64
+	passed, failed := 0, 0
+
 	for _, s := range input.Steps {
 		icon := "✅"
-		if s.Status == "failed" {
+		switch s.Status {
+		case "failed":
 			icon = "❌"
-		} else if s.Status == "skipped" {
+			failed++
+		case "skipped":
 			icon = "⏭️"
-		} else if s.Status == "cancelled" {
+		case "cancelled":
 			icon = "🚫"
+			failed++
+		default:
+			passed++
 		}
+		totalDuration += s.Duration
+
 		if s.Duration > 0.1 {
-			fmt.Fprintf(&summary, "%s **%s** (exit %d, %.1fs)\n", icon, s.Name, s.ExitCode, s.Duration)
+			fmt.Fprintf(&summary, "%s **%s** (%.1fs)\n", icon, s.Name, s.Duration)
 		} else {
-			fmt.Fprintf(&summary, "%s **%s** (exit %d)\n", icon, s.Name, s.ExitCode)
+			fmt.Fprintf(&summary, "%s **%s**\n", icon, s.Name)
+		}
+
+		// Add collapsible log output for steps that have output
+		if s.Output != "" {
+			fmt.Fprintf(&details, "\n<details>\n<summary>📋 <b>%s</b> — exit %d</summary>\n\n```\n%s```\n</details>\n", s.Name, s.ExitCode, s.Output)
 		}
 	}
 
@@ -191,9 +207,18 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 
 	// Post PR comment if this is a pull request
 	if input.PRNumber > 0 {
-		body := fmt.Sprintf("## TemporalCI Results\n\n%s\nConclusion: **%s**", summary.String(), state)
+		var body strings.Builder
+		fmt.Fprintf(&body, "## TemporalCI Results\n\n")
+		fmt.Fprintf(&body, "%s\n", summary.String())
+		if totalDuration > 0.1 {
+			fmt.Fprintf(&body, "**%d passed**, **%d failed** in **%.1fs**\n", passed, failed, totalDuration)
+		}
+		if details.Len() > 0 {
+			fmt.Fprintf(&body, "\n### Step Logs\n%s", details.String())
+		}
+		comment := body.String()
 		_, _, err := gh.Issues.CreateComment(ctx, owner, repo, input.PRNumber, &github.IssueComment{
-			Body: &body,
+			Body: &comment,
 		})
 		if err != nil {
 			return fmt.Errorf("create PR comment: %w", err)
