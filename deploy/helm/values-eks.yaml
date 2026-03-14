@@ -26,13 +26,13 @@ webhook:
       cpu: 500m
       memory: 256Mi
 
-temporal:
-  enabled: true
-  cassandra:
-
 temporalWeb:
   loadBalancer:
     enabled: true
+
+temporal:
+  enabled: true
+  cassandra:
     enabled: false
   elasticsearch:
     enabled: false
@@ -40,7 +40,12 @@ temporalWeb:
     enabled: false
   grafana:
     enabled: false
+  web:
+    enabled: true
   server:
+    frontend:
+      service:
+        port: 7233
     config:
       persistence:
         default:
