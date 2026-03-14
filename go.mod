@@ -9,5 +9,7 @@ require (
 	github.com/google/go-github/v67 v67.0.0
 	go.temporal.io/sdk v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
+	k8s.io/api v0.31.0
+	k8s.io/apimachinery v0.31.0
 	k8s.io/client-go v0.31.0
 )
