@@ -13,3 +13,4 @@ output "cluster_certificate_authority" {
 output "ecr_repository_url" {
   value = aws_ecr_repository.temporalci.repository_url
 }
+
