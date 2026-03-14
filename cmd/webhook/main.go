@@ -10,24 +10,50 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"go.temporal.io/sdk/client"
+
+	"github.com/AndreKurait/TemporalCI/internal/config"
+	"github.com/AndreKurait/TemporalCI/internal/workflows"
 )
 
+const taskQueue = "temporalci-task-queue"
+
+var temporalClient client.Client
+
 func main() {
+	cfg := config.LoadConfig()
+
+	c, err := client.Dial(client.Options{HostPort: cfg.TemporalHostPort})
+	if err != nil {
+		log.Fatalf("Unable to create Temporal client: %v", err)
+	}
+	defer c.Close()
+	temporalClient = c
+
+	webhookSecret = loadWebhookSecret(cfg)
+
 	http.HandleFunc("/webhook", handleWebhook)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, "ok")
 	})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	log.Printf("Starting webhook server on :%s", cfg.WebhookPort)
+	if err := http.ListenAndServe(":"+cfg.WebhookPort, nil); err != nil {
+		log.Fatalf("Server error: %v", err)
 	}
+}
 
-	log.Printf("Starting webhook server on :%s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("server error: %v", err)
+var webhookSecret string
+
+// loadWebhookSecret reads from file first, falls back to env var.
+func loadWebhookSecret(cfg config.Config) string {
+	data, err := os.ReadFile("/etc/temporalci/github-webhook-secret")
+	if err == nil {
+		return string(data)
 	}
+	return cfg.GitHubWebhookSecret
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
@@ -42,28 +68,95 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
-	if secret != "" {
+	if webhookSecret != "" {
 		sig := r.Header.Get("X-Hub-Signature-256")
-		if !verifySignature(body, sig, secret) {
+		if !verifySignature(body, sig, webhookSecret) {
 			http.Error(w, "invalid signature", http.StatusUnauthorized)
 			return
 		}
 	}
 
 	event := r.Header.Get("X-GitHub-Event")
-	log.Printf("Received event: %s", event)
-
-	var payload map[string]interface{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if event != "push" && event != "pull_request" {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"ignored","event":%q}`, event)
 		return
 	}
 
-	// TODO: Start Temporal workflow here
-	log.Printf("Would start CI pipeline for event: %s", event)
+	input, err := parseEvent(event, body)
+	if err != nil {
+		http.Error(w, "failed to parse event", http.StatusBadRequest)
+		return
+	}
+
+	workflowID := fmt.Sprintf("ci-%s-%s", input.Repo, input.HeadSHA[:8])
+	opts := client.StartWorkflowOptions{
+		ID:        workflowID,
+		TaskQueue: taskQueue,
+	}
+
+	run, err := temporalClient.ExecuteWorkflow(r.Context(), opts, "CIPipeline", input)
+	if err != nil {
+		log.Printf("Failed to start workflow: %v", err)
+		http.Error(w, "failed to start workflow", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Started workflow %s (run %s) for %s event", run.GetID(), run.GetRunID(), event)
 	w.WriteHeader(http.StatusAccepted)
-	fmt.Fprintf(w, `{"status": "accepted", "event": %q}`, event)
+	fmt.Fprintf(w, `{"status":"accepted","workflowId":%q,"runId":%q}`, run.GetID(), run.GetRunID())
+}
+
+func parseEvent(event string, body []byte) (workflows.CIPipelineInput, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return workflows.CIPipelineInput{}, err
+	}
+
+	input := workflows.CIPipelineInput{
+		Event:   event,
+		Payload: string(body),
+	}
+
+	switch event {
+	case "push":
+		var push struct {
+			Ref        string `json:"ref"`
+			After      string `json:"after"`
+			Repository struct {
+				FullName string `json:"full_name"`
+			} `json:"repository"`
+		}
+		if err := json.Unmarshal(body, &push); err != nil {
+			return input, err
+		}
+		input.Repo = push.Repository.FullName
+		input.Ref = push.Ref
+		input.HeadSHA = push.After
+
+	case "pull_request":
+		var pr struct {
+			Number      int `json:"number"`
+			PullRequest struct {
+				Head struct {
+					SHA string `json:"sha"`
+					Ref string `json:"ref"`
+				} `json:"head"`
+			} `json:"pull_request"`
+			Repository struct {
+				FullName string `json:"full_name"`
+			} `json:"repository"`
+		}
+		if err := json.Unmarshal(body, &pr); err != nil {
+			return input, err
+		}
+		input.Repo = pr.Repository.FullName
+		input.Ref = pr.PullRequest.Head.Ref
+		input.HeadSHA = pr.PullRequest.Head.SHA
+		input.PRNumber = pr.Number
+	}
+
+	return input, nil
 }
 
 func verifySignature(payload []byte, signature, secret string) bool {

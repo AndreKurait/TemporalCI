@@ -1,0 +1,5 @@
+region             = "us-west-2"
+vpc_id             = "vpc-0123456789abcdef0"
+private_subnet_ids = ["subnet-0123456789abcdef0", "subnet-0123456789abcdef1"]
+cluster_name       = "temporalci"
+ecr_repo_name      = "temporalci"
