@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -223,7 +224,7 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		State: &state, Description: &description, Context: &ciContext,
 	}
 	if a.TemporalWebURL != "" && input.WorkflowID != "" {
-		targetURL := fmt.Sprintf("%s/namespaces/default/workflows/%s", a.TemporalWebURL, input.WorkflowID)
+		targetURL := fmt.Sprintf("%s/namespaces/default/workflows/%s", a.TemporalWebURL, url.PathEscape(input.WorkflowID))
 		status.TargetURL = &targetURL
 	}
 	_, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, status)
@@ -241,7 +242,7 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 			fmt.Fprintf(&body, "**%d passed**, **%d failed** in **%.1fs**\n", passed, failed, totalDuration)
 		}
 		if a.TemporalWebURL != "" && input.WorkflowID != "" {
-			fmt.Fprintf(&body, "\n🔗 [View workflow run](%s/namespaces/default/workflows/%s)\n", a.TemporalWebURL, input.WorkflowID)
+			fmt.Fprintf(&body, "\n🔗 [View workflow run](%s/namespaces/default/workflows/%s)\n", a.TemporalWebURL, url.PathEscape(input.WorkflowID))
 		}
 		if details.Len() > 0 {
 			fmt.Fprintf(&body, "\n### Step Logs\n%s", details.String())
