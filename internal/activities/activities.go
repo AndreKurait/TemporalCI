@@ -145,7 +145,11 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		if s.Status == "failed" {
 			icon = "❌"
 		}
-		fmt.Fprintf(&summary, "%s **%s** (exit %d, %.1fs)\n", icon, s.Name, s.ExitCode, s.Duration)
+		if s.Duration > 0.1 {
+			fmt.Fprintf(&summary, "%s **%s** (exit %d, %.1fs)\n", icon, s.Name, s.ExitCode, s.Duration)
+		} else {
+			fmt.Fprintf(&summary, "%s **%s** (exit %d)\n", icon, s.Name, s.ExitCode)
+		}
 	}
 
 	// Create commit status (works with PATs, unlike Check Runs)
