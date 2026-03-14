@@ -15,9 +15,11 @@ type CloneResult struct {
 
 // StepConfig mirrors config.StepConfig for serialization across activity boundary.
 type StepConfig struct {
-	Name    string `json:"name"`
-	Image   string `json:"image"`
-	Command string `json:"command"`
+	Name      string   `json:"name"`
+	Image     string   `json:"image"`
+	Command   string   `json:"command"`
+	Timeout   string   `json:"timeout,omitempty"`
+	DependsOn []string `json:"dependsOn,omitempty"`
 }
 
 // RunStepInput defines the input for the RunStep activity.
@@ -37,11 +39,12 @@ type RunStepResult struct {
 
 // StepResult captures the result of a single CI step (used in reporting).
 type StepResult struct {
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	Output   string `json:"output"`
-	ExitCode int    `json:"exitCode"`
-	JUnitXML string `json:"junitXML,omitempty"`
+	Name     string  `json:"name"`
+	Status   string  `json:"status"`
+	Output   string  `json:"output"`
+	ExitCode int     `json:"exitCode"`
+	Duration float64 `json:"duration"`
+	JUnitXML string  `json:"junitXML,omitempty"`
 }
 
 // ReportInput defines the input for the ReportResults activity.
@@ -50,6 +53,14 @@ type ReportInput struct {
 	HeadSHA  string       `json:"headSHA"`
 	PRNumber int          `json:"prNumber"`
 	Steps    []StepResult `json:"steps"`
+}
+
+// StatusInput defines the input for the SetCommitStatus activity.
+type StatusInput struct {
+	Repo        string `json:"repo"`
+	HeadSHA     string `json:"headSHA"`
+	State       string `json:"state"`
+	Description string `json:"description"`
 }
 
 // UploadLogInput defines the input for the UploadLog activity.

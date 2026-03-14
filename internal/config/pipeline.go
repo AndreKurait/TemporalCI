@@ -15,10 +15,12 @@ type PipelineConfig struct {
 
 // StepConfig defines a single pipeline step.
 type StepConfig struct {
-	Name    string `yaml:"name"`
-	Image   string `yaml:"image"`
-	Command string `yaml:"command"`
-	Timeout string `yaml:"timeout,omitempty"`
+	Name      string   `yaml:"name"`
+	Image     string   `yaml:"image"`
+	Command   string   `yaml:"command"`
+	Timeout   string   `yaml:"timeout,omitempty"`
+	DependsOn []string `yaml:"depends_on,omitempty"`
+	Type      string   `yaml:"type,omitempty"` // "run" (default), "helm-test"
 }
 
 // LoadPipelineConfig reads .temporalci.yaml from the given directory.
