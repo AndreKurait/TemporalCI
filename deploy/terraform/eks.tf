@@ -3,7 +3,7 @@ resource "aws_eks_cluster" "this" {
   role_arn = aws_iam_role.eks_cluster.arn
 
   vpc_config {
-    subnet_ids              = var.private_subnet_ids
+    subnet_ids              = aws_subnet.private[*].id
     endpoint_private_access = true
     endpoint_public_access  = true
   }
@@ -36,11 +36,9 @@ resource "aws_eks_cluster" "this" {
     aws_iam_role_policy_attachment.eks_block_storage_policy,
     aws_iam_role_policy_attachment.eks_load_balancing_policy,
     aws_iam_role_policy_attachment.eks_networking_policy,
+    aws_nat_gateway.this,
   ]
 }
-
-# Custom NodePools (system, ci-jobs) are managed via Kubernetes NodePool CRD
-# after cluster creation. See deploy/helm/templates/nodepool-*.yaml
 
 resource "aws_eks_addon" "secrets_store_csi" {
   cluster_name = aws_eks_cluster.this.name
