@@ -1,56 +1,13 @@
-# Production values - copy to values-prod.yaml and fill in
-image:
-  registry: <account-id>.dkr.ecr.<region>.amazonaws.com
-  repository: temporalci
-  tag: latest
-  pullPolicy: Always
-
-worker:
-  replicas: 2
-  resources:
-    requests:
-      cpu: 250m
-      memory: 256Mi
-    limits:
-      cpu: "1"
-      memory: 512Mi
-
-webhook:
-  replicas: 2
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 256Mi
-
-temporal:
-  enabled: true
-
-postgresql:
-  enabled: true
-  auth:
-    postgresPassword: <strong-password>
-    database: temporal
-  primary:
-    persistence:
-      storageClass: gp3
-
-aws:
-  region: <region>
-
-secrets:
-  prefix: temporalci
-  local:
-    enabled: false
-  aws:
-    enabled: true
-
-serviceAccounts:
-  worker:
-    roleArn: arn:aws:iam::<account-id>:role/temporalci-worker
-  webhook:
-    roleArn: arn:aws:iam::<account-id>:role/temporalci-webhook
-  ciJob:
-    roleArn: arn:aws:iam::<account-id>:role/temporalci-ci-job
+# Production values example
+# The actual deployed EKS configuration is in values-eks.yaml.
+# To deploy with secrets:
+#
+#   helm upgrade --install temporalci deploy/helm \
+#     -n temporalci --create-namespace \
+#     -f deploy/helm/values.yaml \
+#     -f deploy/helm/values-eks.yaml \
+#     --set secrets.local.githubToken=ghp_xxx \
+#     --set secrets.local.githubWebhookSecret=xxx
+#
+# Or use the bootstrap script:
+#   GITHUB_TOKEN=ghp_xxx ./scripts/bootstrap.sh

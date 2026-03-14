@@ -17,6 +17,8 @@ worker:
 webhook:
   replicas: 1
   port: 8080
+  loadBalancer:
+    enabled: false
   resources:
     requests:
       cpu: 50m
