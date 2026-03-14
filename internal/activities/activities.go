@@ -33,7 +33,9 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 	_ = os.RemoveAll(dir)
 
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", input.Repo)
-	if err := runCmd(ctx, "", "git", "clone", "--depth=1", "--branch", input.Ref, cloneURL, dir); err != nil {
+	branch := strings.TrimPrefix(input.Ref, "refs/heads/")
+	branch = strings.TrimPrefix(branch, "refs/tags/")
+	if err := runCmd(ctx, "", "git", "clone", "--depth=1", "--branch", branch, cloneURL, dir); err != nil {
 		return CloneResult{}, fmt.Errorf("git clone: %w", err)
 	}
 
