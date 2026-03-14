@@ -20,7 +20,7 @@ func LoadConfig() Config {
 	return Config{
 		TemporalHostPort:    getEnv("TEMPORAL_HOST_PORT", "localhost:7233"),
 		WebhookPort:         getEnv("PORT", "8080"),
-		GitHubWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		GitHubWebhookSecret: getEnvOrFile("GITHUB_WEBHOOK_SECRET", "/etc/temporalci/github-webhook-secret"),
 		GitHubToken:         getEnvOrFile("GITHUB_TOKEN", "/etc/temporalci/github-token"),
 		LogBucket:           os.Getenv("LOG_BUCKET"),
 		AWSRegion:           getEnv("AWS_REGION", "us-east-1"),

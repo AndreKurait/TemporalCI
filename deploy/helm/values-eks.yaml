@@ -1,0 +1,79 @@
+image:
+  registry: 969644818851.dkr.ecr.us-east-1.amazonaws.com
+  tag: latest
+  pullPolicy: Always
+
+worker:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+webhook:
+  replicas: 1
+  port: 8080
+  loadBalancer:
+    enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+temporal:
+  enabled: true
+  cassandra:
+    enabled: false
+  elasticsearch:
+    enabled: false
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+  server:
+    config:
+      persistence:
+        default:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: temporalci-postgresql
+            port: 5432
+            database: temporal
+            user: postgres
+            password: temporal
+        visibility:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: temporalci-postgresql
+            port: 5432
+            database: temporal_visibility
+            user: postgres
+            password: temporal
+
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      storageClass: ebs-gp3
+  image:
+    registry: public.ecr.aws
+    repository: bitnami/postgresql
+    tag: 17.2.0-debian-12-r6
+
+global:
+  security:
+    allowInsecureImages: true
+
+secrets:
+  local:
+    enabled: true
+    githubWebhookSecret: ""  # Set via --set or K8s secret
+    githubToken: ""  # Set via --set or K8s secret

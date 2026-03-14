@@ -1,8 +1,4 @@
-.PHONY: build test lint clean deploy redeploy
-
-HELM_RELEASE ?= temporalci
-HELM_NAMESPACE ?= temporalci
-HELM_VALUES ?= deploy/helm/values-local.yaml
+.PHONY: build test lint clean deploy bootstrap
 
 build:
 	go build ./...
@@ -16,12 +12,13 @@ lint:
 clean:
 	rm -rf /tmp/ci
 
-deploy:
-	helm upgrade --install $(HELM_RELEASE) deploy/helm \
-		-n $(HELM_NAMESPACE) --create-namespace \
-		-f $(HELM_VALUES)
+# Bootstrap entire infrastructure + GitOps from scratch
+bootstrap:
+	./scripts/bootstrap.sh
 
-redeploy:
-	helm upgrade $(HELM_RELEASE) deploy/helm \
-		-n $(HELM_NAMESPACE) \
-		-f $(HELM_VALUES) --force
+# Manual deploy (for development; production uses ArgoCD)
+deploy:
+	helm upgrade --install temporalci deploy/helm \
+		-n temporalci --create-namespace \
+		-f deploy/helm/values.yaml \
+		-f deploy/helm/values-eks.yaml

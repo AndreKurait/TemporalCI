@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 
 	"go.temporal.io/sdk/client"
 
@@ -31,7 +30,7 @@ func main() {
 	defer c.Close()
 	temporalClient = c
 
-	webhookSecret = loadWebhookSecret(cfg)
+	webhookSecret = cfg.GitHubWebhookSecret
 
 	http.HandleFunc("/webhook", handleWebhook)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -46,15 +45,6 @@ func main() {
 }
 
 var webhookSecret string
-
-// loadWebhookSecret reads from file first, falls back to env var.
-func loadWebhookSecret(cfg config.Config) string {
-	data, err := os.ReadFile("/etc/temporalci/github-webhook-secret")
-	if err == nil {
-		return string(data)
-	}
-	return cfg.GitHubWebhookSecret
-}
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -88,8 +78,13 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to parse event", http.StatusBadRequest)
 		return
 	}
+	if input.Repo == "" {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"ignored","reason":"unsupported action"}`)
+		return
+	}
 
-	workflowID := fmt.Sprintf("ci-%s-%s", input.Repo, input.HeadSHA[:8])
+	workflowID := fmt.Sprintf("ci-%s-%s-%s", input.Repo, input.HeadSHA[:8], event)
 	opts := client.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: taskQueue,
@@ -136,7 +131,8 @@ func parseEvent(event string, body []byte) (workflows.CIPipelineInput, error) {
 
 	case "pull_request":
 		var pr struct {
-			Number      int `json:"number"`
+			Action      string `json:"action"`
+			Number      int    `json:"number"`
 			PullRequest struct {
 				Head struct {
 					SHA string `json:"sha"`
@@ -149,6 +145,9 @@ func parseEvent(event string, body []byte) (workflows.CIPipelineInput, error) {
 		}
 		if err := json.Unmarshal(body, &pr); err != nil {
 			return input, err
+		}
+		if pr.Action != "opened" && pr.Action != "synchronize" {
+			return input, nil // ignored action
 		}
 		input.Repo = pr.Repository.FullName
 		input.Ref = pr.PullRequest.Head.Ref
