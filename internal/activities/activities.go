@@ -145,7 +145,7 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 	// Determine overall state
 	state := "success"
 	for _, s := range input.Steps {
-		if s.Status == "failed" {
+		if s.Status == "failed" || s.Status == "cancelled" {
 			state = "failure"
 			break
 		}
