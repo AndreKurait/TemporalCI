@@ -75,7 +75,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	}
 
 	// Helper to run a single step (regular or helm-test)
-	runStep := func(stepCtx workflow.Context, step activities.StepConfig) (activities.RunStepResult, error) {
+	_ = func(stepCtx workflow.Context, step activities.StepConfig) (activities.RunStepResult, error) {
 		if step.Type == "helm-test" && step.Helm != nil {
 			// Run as child workflow
 			childOpts := workflow.ChildWorkflowOptions{

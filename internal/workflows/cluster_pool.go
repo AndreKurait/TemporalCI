@@ -51,8 +51,6 @@ func ClusterPool(ctx workflow.Context, poolName string, maxSize int) error {
 				cluster := state.Warm[0]
 				state.Warm = state.Warm[1:]
 				state.Leased = append(state.Leased, cluster)
-				// Signal back the result via a named signal
-				workflow.GetSignalChannel(ctx, "lease-result-"+cluster).Send(ctx, cluster)
 			} else if len(state.Warm)+len(state.Leased) < state.MaxSize {
 				// Provision a new cluster
 				var result activities.ClusterLeaseResult
