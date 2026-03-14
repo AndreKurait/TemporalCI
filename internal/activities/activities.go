@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -27,6 +28,9 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 	logger.Info("Cloning repo", "repo", input.Repo, "ref", input.Ref)
 
 	dir := fmt.Sprintf("/tmp/ci/%s/%s", input.Repo, input.Ref)
+
+	// Clean up any previous clone
+	_ = os.RemoveAll(dir)
 
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", input.Repo)
 	if err := runCmd(ctx, "", "git", "clone", "--depth=1", cloneURL, dir); err != nil {
