@@ -8,6 +8,7 @@ import (
 // Config holds all application configuration.
 type Config struct {
 	TemporalHostPort    string
+	TemporalWebURL      string
 	WebhookPort         string
 	GitHubWebhookSecret string
 	GitHubToken         string
@@ -19,6 +20,7 @@ type Config struct {
 func LoadConfig() Config {
 	return Config{
 		TemporalHostPort:    getEnv("TEMPORAL_HOST_PORT", "localhost:7233"),
+		TemporalWebURL:      os.Getenv("TEMPORAL_WEB_URL"),
 		WebhookPort:         getEnv("PORT", "8080"),
 		GitHubWebhookSecret: getEnvOrFile("GITHUB_WEBHOOK_SECRET", "/etc/temporalci/github-webhook-secret"),
 		GitHubToken:         getEnvOrFile("GITHUB_TOKEN", "/etc/temporalci/github-token"),

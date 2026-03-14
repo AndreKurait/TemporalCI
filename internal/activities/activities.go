@@ -17,10 +17,11 @@ import (
 
 // Activities holds shared dependencies for all activity methods.
 type Activities struct {
-	K8sClient   kubernetes.Interface
-	GitHubToken string
-	LogBucket   string
-	AWSRegion   string
+	K8sClient      kubernetes.Interface
+	GitHubToken    string
+	TemporalWebURL string
+	LogBucket      string
+	AWSRegion      string
 }
 
 // CloneRepo clones a repository at the given ref.
@@ -175,11 +176,14 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		description = description[:140]
 	}
 	ciContext := "TemporalCI"
-	_, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, &github.RepoStatus{
-		State:       &state,
-		Description: &description,
-		Context:     &ciContext,
-	})
+	status := &github.RepoStatus{
+		State: &state, Description: &description, Context: &ciContext,
+	}
+	if a.TemporalWebURL != "" && input.WorkflowID != "" {
+		targetURL := fmt.Sprintf("%s/namespaces/default/workflows/%s", a.TemporalWebURL, input.WorkflowID)
+		status.TargetURL = &targetURL
+	}
+	_, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, status)
 	if err != nil {
 		return fmt.Errorf("create commit status: %w", err)
 	}
