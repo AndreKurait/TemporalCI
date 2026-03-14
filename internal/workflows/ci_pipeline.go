@@ -15,13 +15,15 @@ import (
 func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, error) {
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Minute,
-		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 3,
-		},
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
-
 	var acts *activities.Activities
+
+	reportCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
 
 	// 1. Clone repo
 	var cloneResult activities.CloneResult
@@ -34,7 +36,13 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		return CIPipelineResult{Status: "failed"}, fmt.Errorf("clone: %w", err)
 	}
 
-	// 2. Load pipeline config from clone result, fall back to default
+	// 2. Set pending commit status
+	_ = workflow.ExecuteActivity(reportCtx, acts.SetCommitStatus, activities.StatusInput{
+		Repo: input.Repo, HeadSHA: input.HeadSHA,
+		State: "pending", Description: "CI running...",
+	}).Get(ctx, nil)
+
+	// 3. Load steps
 	steps := cloneResult.Steps
 	if len(steps) == 0 {
 		for _, s := range config.DefaultConfig().Steps {
@@ -42,49 +50,103 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		}
 	}
 
-	// 3. Run each step
-	var results []activities.StepResult
+	// 4. Run steps
+	results := make([]activities.StepResult, len(steps))
 	overallStatus := "passed"
 
-	for _, step := range steps {
-		var stepResult activities.RunStepResult
-		err := workflow.ExecuteActivity(ctx, acts.RunStep, activities.RunStepInput{
-			Dir:     cloneResult.Dir,
-			Command: step.Command,
-			Name:    step.Name,
-			Image:   step.Image,
-		}).Get(ctx, &stepResult)
-
-		status := "passed"
-		if err != nil || stepResult.ExitCode != 0 {
-			status = "failed"
-			overallStatus = "failed"
-		}
-
-		results = append(results, activities.StepResult{
-			Name:     step.Name,
-			Status:   status,
-			Output:   stepResult.Output,
-			ExitCode: stepResult.ExitCode,
-			JUnitXML: stepResult.JUnitXML,
-		})
-
-		if err != nil {
+	hasDepends := false
+	for _, s := range steps {
+		if len(s.DependsOn) > 0 {
+			hasDepends = true
 			break
 		}
 	}
 
-	// 4. Report results (best-effort, no retries)
-	reportCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Second,
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-	})
+	if !hasDepends {
+		// All steps in parallel
+		futures := make([]workflow.Future, len(steps))
+		starts := make([]time.Time, len(steps))
+		for i, step := range steps {
+			starts[i] = workflow.Now(ctx)
+			stepCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+				StartToCloseTimeout: parseTimeout(step.Timeout, 10*time.Minute),
+				RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+			})
+			futures[i] = workflow.ExecuteActivity(stepCtx, acts.RunStep, activities.RunStepInput{
+				Dir: cloneResult.Dir, Command: step.Command, Name: step.Name, Image: step.Image,
+			})
+		}
+		for i, f := range futures {
+			var stepResult activities.RunStepResult
+			err := f.Get(ctx, &stepResult)
+			duration := workflow.Now(ctx).Sub(starts[i]).Seconds()
+			status := "passed"
+			if err != nil || stepResult.ExitCode != 0 {
+				status = "failed"
+				overallStatus = "failed"
+			}
+			results[i] = activities.StepResult{
+				Name: steps[i].Name, Status: status, Output: stepResult.Output,
+				ExitCode: stepResult.ExitCode, Duration: duration,
+			}
+		}
+	} else {
+		// Sequential with dependency tracking
+		completed := make(map[string]bool)
+		for i, step := range steps {
+			depsOk := true
+			for _, dep := range step.DependsOn {
+				if !completed[dep] {
+					depsOk = false
+					break
+				}
+			}
+			if !depsOk {
+				results[i] = activities.StepResult{Name: step.Name, Status: "skipped", ExitCode: -1}
+				continue
+			}
+
+			start := workflow.Now(ctx)
+			stepCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+				StartToCloseTimeout: parseTimeout(step.Timeout, 10*time.Minute),
+				RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+			})
+			var stepResult activities.RunStepResult
+			err := workflow.ExecuteActivity(stepCtx, acts.RunStep, activities.RunStepInput{
+				Dir: cloneResult.Dir, Command: step.Command, Name: step.Name, Image: step.Image,
+			}).Get(ctx, &stepResult)
+			duration := workflow.Now(ctx).Sub(start).Seconds()
+
+			status := "passed"
+			if err != nil || stepResult.ExitCode != 0 {
+				status = "failed"
+				overallStatus = "failed"
+			}
+			results[i] = activities.StepResult{
+				Name: step.Name, Status: status, Output: stepResult.Output,
+				ExitCode: stepResult.ExitCode, Duration: duration,
+			}
+			if status == "passed" {
+				completed[step.Name] = true
+			}
+		}
+	}
+
+	// 5. Report results
 	_ = workflow.ExecuteActivity(reportCtx, acts.ReportResults, activities.ReportInput{
-		Repo:     input.Repo,
-		HeadSHA:  input.HeadSHA,
-		PRNumber: input.PRNumber,
-		Steps:    results,
+		Repo: input.Repo, HeadSHA: input.HeadSHA, PRNumber: input.PRNumber, Steps: results,
 	}).Get(ctx, nil)
 
 	return CIPipelineResult{Status: overallStatus, Steps: results}, nil
+}
+
+func parseTimeout(s string, fallback time.Duration) time.Duration {
+	if s == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return fallback
+	}
+	return d
 }

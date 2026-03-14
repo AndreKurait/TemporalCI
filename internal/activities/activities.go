@@ -44,7 +44,7 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 	var steps []StepConfig
 	if pCfg, err := config.LoadPipelineConfig(dir); err == nil {
 		for _, s := range pCfg.Steps {
-			steps = append(steps, StepConfig{Name: s.Name, Image: s.Image, Command: s.Command})
+			steps = append(steps, StepConfig{Name: s.Name, Image: s.Image, Command: s.Command, Timeout: s.Timeout, DependsOn: s.DependsOn})
 		}
 	}
 
@@ -95,6 +95,23 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 	}, nil
 }
 
+// SetCommitStatus sets a commit status on GitHub (pending, success, failure).
+func (a *Activities) SetCommitStatus(ctx context.Context, input StatusInput) error {
+	if a.GitHubToken == "" {
+		return nil
+	}
+	gh := github.NewClient(nil).WithAuthToken(a.GitHubToken)
+	parts := strings.SplitN(input.Repo, "/", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid repo: %s", input.Repo)
+	}
+	ciContext := "TemporalCI"
+	_, _, err := gh.Repositories.CreateStatus(ctx, parts[0], parts[1], input.HeadSHA, &github.RepoStatus{
+		State: &input.State, Description: &input.Description, Context: &ciContext,
+	})
+	return err
+}
+
 // ReportResults reports CI results back to GitHub via commit status and PR comments.
 func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error {
 	logger := activity.GetLogger(ctx)
@@ -128,7 +145,7 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		if s.Status == "failed" {
 			icon = "❌"
 		}
-		fmt.Fprintf(&summary, "%s **%s** (exit %d)\n", icon, s.Name, s.ExitCode)
+		fmt.Fprintf(&summary, "%s **%s** (exit %d, %.1fs)\n", icon, s.Name, s.ExitCode, s.Duration)
 	}
 
 	// Create commit status (works with PATs, unlike Check Runs)
