@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-worker
+  name: {{ .Release.Name }}-ci-worker
   labels:
     {{- include "temporalci.labels" . | nindent 4 }}
-    app.kubernetes.io/component: worker
+    app.kubernetes.io/component: ci-worker
 spec:
   replicas: {{ .Values.worker.replicas }}
   selector:
     matchLabels:
       {{- include "temporalci.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: worker
+      app.kubernetes.io/component: ci-worker
   template:
     metadata:
       labels:
         {{- include "temporalci.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: worker
+        app.kubernetes.io/component: ci-worker
     spec:
       containers:
         - name: worker
