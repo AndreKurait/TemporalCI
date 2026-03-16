@@ -5,6 +5,7 @@ image:
 
 worker:
   replicas: 1
+  temporalWebURL: "http://<ELB_HOSTNAME>"
   resources:
     requests:
       cpu: 200m
