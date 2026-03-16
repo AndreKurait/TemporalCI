@@ -1,4 +1,4 @@
-name: Docker Build
+name: Docker Build & Deploy
 
 on:
   push:
@@ -10,6 +10,8 @@ jobs:
     if: ${{ vars.SKIP_DOCKER != 'true' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -30,3 +32,36 @@ jobs:
           docker build -t "${IMAGE}:${GITHUB_SHA}" -t "${IMAGE}:latest" .
           docker push "${IMAGE}:${GITHUB_SHA}"
           docker push "${IMAGE}:latest"
+
+      - name: Update image tag for GitOps
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          sed -i "s/^  tag: .*/  tag: ${GITHUB_SHA}/" deploy/helm/values-eks.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/helm/values-eks.yaml
+          git diff --cached --quiet && echo "No tag change" && exit 0
+          git commit -m "deploy: update image tag to ${SHORT_SHA} [skip ci]"
+          git push
+
+      - name: Create GitHub deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              auto_merge: false,
+              required_contexts: [],
+              description: `Deploy ${context.sha.substring(0, 7)} to EKS`
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              description: 'Image pushed to ECR, ArgoCD will sync',
+              environment_url: 'http://<ELB_HOSTNAME>'
+            });
