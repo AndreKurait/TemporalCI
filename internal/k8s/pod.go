@@ -41,7 +41,12 @@ func RunPod(ctx context.Context, client kubernetes.Interface, spec PodSpec) (Pod
 
 	created, err := client.CoreV1().Pods(spec.Namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
-		return PodResult{}, fmt.Errorf("create pod: %w", err)
+		// Pod may exist from a previous run — delete and retry
+		_ = client.CoreV1().Pods(spec.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+		created, err = client.CoreV1().Pods(spec.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+		if err != nil {
+			return PodResult{}, fmt.Errorf("create pod: %w", err)
+		}
 	}
 	defer func() {
 		_ = client.CoreV1().Pods(spec.Namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
