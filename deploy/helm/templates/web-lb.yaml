@@ -1,11 +1,50 @@
 {{- if .Values.temporalWeb.loadBalancer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: web-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: web-proxy
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-web-nginx
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Release.Name }}-web-lb
   labels:
     {{- include "temporalci.labels" . | nindent 4 }}
-    app.kubernetes.io/component: web
+    app.kubernetes.io/component: web-proxy
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
     service.beta.kubernetes.io/aws-load-balancer-type: nlb
@@ -13,10 +52,8 @@ spec:
   type: LoadBalancer
   ports:
     - port: 80
-      targetPort: 8080
+      targetPort: 80
       protocol: TCP
   selector:
-    app.kubernetes.io/name: temporal
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/component: web
+    app.kubernetes.io/component: web-proxy
 {{- end }}
