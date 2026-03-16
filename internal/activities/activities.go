@@ -23,10 +23,18 @@ type Activities struct {
 	K8sClient      kubernetes.Interface
 	GitHubToken    string
 	TemporalWebURL string
-	LogBucket      string
-	AWSRegion      string
-	ClusterRoleARN string
-	SubnetIDs      string
+	Namespace      string // K8s namespace for CI pods, defaults to "default"
+}
+
+func (a *Activities) namespace() string {
+	if a.Namespace != "" {
+		return a.Namespace
+	}
+	// Try to read from downward API
+	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
+		return strings.TrimSpace(string(ns))
+	}
+	return "default"
 }
 
 // CloneRepo clones a repository at the given ref.
@@ -35,80 +43,72 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 	logger.Info("Cloning repo", "repo", input.Repo, "ref", input.Ref)
 
 	dir := fmt.Sprintf("/tmp/ci/%s", input.WorkflowID)
-
-	// Clean up any previous clone
 	_ = os.RemoveAll(dir)
 
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", input.Repo)
-	branch := strings.TrimPrefix(input.Ref, "refs/heads/")
-	branch = strings.TrimPrefix(branch, "refs/tags/")
+	branch := trimRef(input.Ref)
 	if err := runCmd(ctx, "", "git", "clone", "--depth=1", "--branch", branch, cloneURL, dir); err != nil {
 		return CloneResult{}, fmt.Errorf("git clone: %w", err)
 	}
 
-	// Load pipeline config from cloned repo
 	var steps []StepConfig
 	if pCfg, err := config.LoadPipelineConfig(dir); err == nil {
 		for _, s := range pCfg.Steps {
-			steps = append(steps, StepConfig{
-			Name: s.Name, Image: s.Image, Command: s.Command,
-			Timeout: s.Timeout, DependsOn: s.DependsOn, Type: s.Type,
-			Secrets: s.Secrets, Outputs: s.Outputs,
-		})
-		if s.Resources != nil {
-			steps[len(steps)-1].Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
-		}
-		if s.Helm != nil {
-			steps[len(steps)-1].Helm = &HelmConfig{
-				Chart: s.Helm.Chart, Values: s.Helm.Values,
-				TestCommand: s.Helm.TestCommand, ClusterPool: s.Helm.ClusterPool, ClusterTTL: s.Helm.ClusterTTL,
+			sc := StepConfig{
+				Name: s.Name, Image: s.Image, Command: s.Command,
+				Timeout: s.Timeout, DependsOn: s.DependsOn,
 			}
-		}
+			if s.Resources != nil {
+				sc.Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
+			}
+			steps = append(steps, sc)
 		}
 	}
 
 	return CloneResult{Dir: dir, Steps: steps}, nil
 }
 
-// RunStep executes a single CI step in a K8s pod, or locally if K8sClient is nil.
+// RunStep executes a single CI step as a K8s pod or locally.
 func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Running step", "name", input.Name, "image", input.Image)
 
 	if a.K8sClient != nil {
-		info := activity.GetInfo(ctx)
-		h := sha256.Sum256([]byte(info.WorkflowExecution.ID + info.ActivityID))
-		podName := fmt.Sprintf("ci-%s-%s", input.Name, hex.EncodeToString(h[:6]))
-		spec := k8s.PodSpec{
-			Name:        podName,
-			Namespace:   "temporalci",
-			Image:       input.Image,
-			Command:     []string{"sh", "-c", input.Command},
-			Tolerations: []string{"ci-jobs"},
-		}
-		if input.Repo != "" {
-			branch := strings.TrimPrefix(input.Ref, "refs/heads/")
-			branch = strings.TrimPrefix(branch, "refs/tags/")
-			spec.CloneURL = fmt.Sprintf("https://github.com/%s.git", input.Repo)
-			spec.CloneRef = branch
-		} else {
-			spec.WorkingDir = input.Dir
-		}
-		if input.Resources != nil {
-			spec.CPU = input.Resources.CPU
-			spec.Memory = input.Resources.Memory
-		}
-		result, err := k8s.RunPod(ctx, a.K8sClient, spec)
-		if err != nil {
-			return RunStepResult{}, fmt.Errorf("k8s pod: %w", err)
-		}
-		return RunStepResult{
-			ExitCode: result.ExitCode,
-			Output:   truncateOutput(result.Logs, 4000),
-		}, nil
+		return a.runStepK8s(ctx, input)
+	}
+	return a.runStepLocal(ctx, input)
+}
+
+func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunStepResult, error) {
+	info := activity.GetInfo(ctx)
+	h := sha256.Sum256([]byte(info.WorkflowExecution.ID + info.ActivityID))
+	podName := fmt.Sprintf("ci-%s-%s", input.Name, hex.EncodeToString(h[:6]))
+
+	spec := k8s.PodSpec{
+		Name:      podName,
+		Namespace: a.namespace(),
+		Image:     input.Image,
+		Command:   []string{"sh", "-c", input.Command},
+	}
+	if input.Repo != "" {
+		spec.CloneURL = fmt.Sprintf("https://github.com/%s.git", input.Repo)
+		spec.CloneRef = trimRef(input.Ref)
+	} else {
+		spec.WorkingDir = input.Dir
+	}
+	if input.Resources != nil {
+		spec.CPU = input.Resources.CPU
+		spec.Memory = input.Resources.Memory
 	}
 
-	// Local mode fallback: run command directly via shell
+	result, err := k8s.RunPod(ctx, a.K8sClient, spec)
+	if err != nil {
+		return RunStepResult{}, fmt.Errorf("k8s pod: %w", err)
+	}
+	return RunStepResult{ExitCode: result.ExitCode, Output: TruncateOutput(result.Logs, 4000)}, nil
+}
+
+func (a *Activities) runStepLocal(ctx context.Context, input RunStepInput) (RunStepResult, error) {
 	cmd := exec.CommandContext(ctx, "sh", "-c", input.Command)
 	cmd.Dir = input.Dir
 	out, err := cmd.CombinedOutput()
@@ -120,61 +120,46 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 			return RunStepResult{}, fmt.Errorf("exec: %w", err)
 		}
 	}
-
-	return RunStepResult{
-		ExitCode: exitCode,
-		Output:   truncateOutput(string(out), 4000),
-	}, nil
+	return RunStepResult{ExitCode: exitCode, Output: TruncateOutput(string(out), 4000)}, nil
 }
 
-// Cleanup removes the clone directory after a workflow completes.
+// Cleanup removes the clone directory.
 func (a *Activities) Cleanup(ctx context.Context, dir string) error {
 	return os.RemoveAll(dir)
 }
 
-// truncateOutput keeps the last maxLen bytes, prepending a truncation notice.
-func truncateOutput(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return "... (truncated)\n" + s[len(s)-maxLen:]
-}
-
-// SetCommitStatus sets a commit status on GitHub (pending, success, failure).
+// SetCommitStatus sets a commit status on GitHub.
 func (a *Activities) SetCommitStatus(ctx context.Context, input StatusInput) error {
 	if a.GitHubToken == "" {
 		return nil
 	}
-	gh := github.NewClient(nil).WithAuthToken(a.GitHubToken)
-	parts := strings.SplitN(input.Repo, "/", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid repo: %s", input.Repo)
+	owner, repo, err := splitRepo(input.Repo)
+	if err != nil {
+		return err
 	}
+	gh := github.NewClient(nil).WithAuthToken(a.GitHubToken)
 	ciContext := "TemporalCI"
-	_, _, err := gh.Repositories.CreateStatus(ctx, parts[0], parts[1], input.HeadSHA, &github.RepoStatus{
+	_, _, err = gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, &github.RepoStatus{
 		State: &input.State, Description: &input.Description, Context: &ciContext,
 	})
 	return err
 }
 
-// ReportResults reports CI results back to GitHub via commit status and PR comments.
+// ReportResults reports CI results to GitHub via commit status and PR comment.
 func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Reporting results", "repo", input.Repo, "sha", input.HeadSHA, "steps", len(input.Steps))
 
 	if a.GitHubToken == "" {
-		logger.Warn("No GitHub token configured, skipping report")
 		return nil
 	}
 
-	gh := github.NewClient(nil).WithAuthToken(a.GitHubToken)
-	parts := strings.SplitN(input.Repo, "/", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid repo format: %s", input.Repo)
+	owner, repo, err := splitRepo(input.Repo)
+	if err != nil {
+		return err
 	}
-	owner, repo := parts[0], parts[1]
+	gh := github.NewClient(nil).WithAuthToken(a.GitHubToken)
 
-	// Determine overall state
 	state := "success"
 	for _, s := range input.Steps {
 		if s.Status == "failed" || s.Status == "cancelled" {
@@ -183,9 +168,8 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		}
 	}
 
-	// Build summary line and detailed sections
-	var summary strings.Builder
-	var details strings.Builder
+	// Build comment body
+	var summary, details strings.Builder
 	var totalDuration float64
 	passed, failed := 0, 0
 
@@ -210,61 +194,97 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		} else {
 			fmt.Fprintf(&summary, "%s **%s**\n", icon, s.Name)
 		}
-
-		// Add collapsible log output for steps that have output
 		if s.Output != "" {
 			fmt.Fprintf(&details, "\n<details>\n<summary>📋 <b>%s</b> — exit %d</summary>\n\n```\n%s```\n</details>\n", s.Name, s.ExitCode, s.Output)
 		}
 	}
 
-	// Create commit status (works with PATs, unlike Check Runs)
+	// Commit status
 	description := fmt.Sprintf("CI %s (%d steps)", state, len(input.Steps))
-	if len(description) > 140 {
-		description = description[:140]
-	}
 	ciContext := "TemporalCI"
-	status := &github.RepoStatus{
-		State: &state, Description: &description, Context: &ciContext,
-	}
+	status := &github.RepoStatus{State: &state, Description: &description, Context: &ciContext}
 	if a.TemporalWebURL != "" && input.WorkflowID != "" {
-		targetURL := fmt.Sprintf("%s/namespaces/default/workflows/%s", a.TemporalWebURL, url.PathEscape(input.WorkflowID))
+		targetURL := WorkflowURL(a.TemporalWebURL, input.WorkflowID)
 		status.TargetURL = &targetURL
 	}
-	_, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, status)
-	if err != nil {
+	if _, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, status); err != nil {
 		return fmt.Errorf("create commit status: %w", err)
 	}
-	logger.Info("Created commit status", "state", state)
 
-	// Post PR comment if this is a pull request
+	// PR comment — find and update existing, or create new
 	if input.PRNumber > 0 {
 		var body strings.Builder
-		fmt.Fprintf(&body, "## TemporalCI Results\n\n")
-		fmt.Fprintf(&body, "%s\n", summary.String())
+		fmt.Fprintf(&body, "## TemporalCI Results\n\n%s\n", summary.String())
 		if totalDuration > 0.1 {
 			fmt.Fprintf(&body, "**%d passed**, **%d failed** in **%.1fs**\n", passed, failed, totalDuration)
 		}
 		if a.TemporalWebURL != "" && input.WorkflowID != "" {
-			fmt.Fprintf(&body, "\n🔗 [View workflow run](%s/namespaces/default/workflows/%s)\n", a.TemporalWebURL, url.PathEscape(input.WorkflowID))
+			fmt.Fprintf(&body, "\n🔗 [View workflow run](%s)\n", WorkflowURL(a.TemporalWebURL, input.WorkflowID))
 		}
 		if details.Len() > 0 {
 			fmt.Fprintf(&body, "\n### Step Logs\n%s", details.String())
 		}
 		comment := body.String()
-		_, _, err := gh.Issues.CreateComment(ctx, owner, repo, input.PRNumber, &github.IssueComment{
-			Body: &comment,
-		})
-		if err != nil {
-			return fmt.Errorf("create PR comment: %w", err)
+
+		if err := upsertPRComment(ctx, gh, owner, repo, input.PRNumber, comment); err != nil {
+			return fmt.Errorf("PR comment: %w", err)
 		}
-		logger.Info("Posted PR comment", "pr", input.PRNumber)
+		logger.Info("Updated PR comment", "pr", input.PRNumber)
 	}
 
 	return nil
 }
 
-// runCmd executes a command with context, optionally in a directory.
-func runCmd(ctx context.Context, dir string, name string, args ...string) error {
+// upsertPRComment finds an existing TemporalCI comment and updates it, or creates a new one.
+func upsertPRComment(ctx context.Context, gh *github.Client, owner, repo string, prNumber int, body string) error {
+	comments, _, err := gh.Issues.ListComments(ctx, owner, repo, prNumber, &github.IssueListCommentsOptions{
+		ListOptions: github.ListOptions{PerPage: 100},
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, c := range comments {
+		if strings.HasPrefix(c.GetBody(), "## TemporalCI Results") {
+			_, _, err := gh.Issues.EditComment(ctx, owner, repo, c.GetID(), &github.IssueComment{Body: &body})
+			return err
+		}
+	}
+
+	_, _, err = gh.Issues.CreateComment(ctx, owner, repo, prNumber, &github.IssueComment{Body: &body})
+	return err
+}
+
+// --- Helpers ---
+
+// TruncateOutput keeps the last maxLen bytes with a truncation notice.
+func TruncateOutput(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return "... (truncated)\n" + s[len(s)-maxLen:]
+}
+
+// WorkflowURL builds a URL to the Temporal Web UI for a workflow.
+func WorkflowURL(baseURL, workflowID string) string {
+	return fmt.Sprintf("%s/namespaces/default/workflows/%s", baseURL, url.PathEscape(workflowID))
+}
+
+func trimRef(ref string) string {
+	ref = strings.TrimPrefix(ref, "refs/heads/")
+	ref = strings.TrimPrefix(ref, "refs/tags/")
+	return ref
+}
+
+func splitRepo(repo string) (string, string, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid repo: %s", repo)
+	}
+	return parts[0], parts[1], nil
+}
+
+func runCmd(ctx context.Context, dir, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	if dir != "" {
 		cmd.Dir = dir

@@ -5,6 +5,7 @@ image:
 
 worker:
   replicas: 1
+  temporalWebURL: "http://k8s-temporal-temporal-34d7ee1732-f0bca35452a1e2fe.elb.us-east-1.amazonaws.com"
   resources:
     requests:
       cpu: 200m

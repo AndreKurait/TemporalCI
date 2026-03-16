@@ -26,23 +26,17 @@ func main() {
 	defer c.Close()
 
 	w := worker.New(c, taskQueue, worker.Options{})
-
 	w.RegisterWorkflow(workflows.CIPipeline)
-	w.RegisterWorkflow(workflows.ClusterPool)
-	w.RegisterWorkflow(workflows.HelmTestPipeline)
 
 	acts := &activities.Activities{
 		GitHubToken:    cfg.GitHubToken,
 		TemporalWebURL: cfg.TemporalWebURL,
-		AWSRegion:      cfg.AWSRegion,
 	}
 
-	// Create in-cluster K8s client if running in K8s
+	// In-cluster K8s client
 	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
-		restCfg, err := rest.InClusterConfig()
-		if err == nil {
-			k8sClient, err := kubernetes.NewForConfig(restCfg)
-			if err == nil {
+		if restCfg, err := rest.InClusterConfig(); err == nil {
+			if k8sClient, err := kubernetes.NewForConfig(restCfg); err == nil {
 				acts.K8sClient = k8sClient
 				log.Println("K8s client initialized (in-cluster mode)")
 			}
@@ -51,7 +45,7 @@ func main() {
 
 	w.RegisterActivity(acts)
 
-	log.Printf("Starting worker on task queue %q, Temporal at %s", taskQueue, cfg.TemporalHostPort)
+	log.Printf("Starting worker on task queue %q", taskQueue)
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		log.Fatalf("Worker failed: %v", err)
 	}
