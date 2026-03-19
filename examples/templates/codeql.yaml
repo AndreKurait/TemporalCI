@@ -1,0 +1,41 @@
+# CodeQL Analysis Pipeline Template
+# Copy this into your .temporalci.yaml pipelines section
+#
+# Prerequisites:
+# - GitHub App has security-events: write permission
+# - SARIF upload is handled automatically by TemporalCI
+
+pipelines:
+  codeql:
+    on:
+      push:
+        branches: [main]
+      schedule:
+        - cron: "25 22 * * 0"  # Weekly Sunday 10:25 PM
+
+    parameters:
+      - name: LANGUAGES
+        type: string
+        default: "java-kotlin,javascript-typescript,python"
+        description: "Comma-separated CodeQL languages"
+
+    steps:
+      - name: analyze
+        image: temporalci/ci-codeql:latest
+        matrix:
+          language: [java-kotlin, javascript-typescript, python]
+        commands:
+          - codeql database create /tmp/codeql-db --language=${{ matrix.language }} --source-root=.
+          - codeql database analyze /tmp/codeql-db --format=sarif-latest --output=/artifacts/${{ matrix.language }}.sarif
+          - |
+            # Upload SARIF to GitHub Security tab
+            curl -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/code-scanning/sarifs" \
+              -d "{\"commit_sha\":\"$HEAD_SHA\",\"ref\":\"$REF\",\"sarif\":\"$(gzip -c /artifacts/${{ matrix.language }}.sarif | base64 -w0)\"}"
+        secrets: [GITHUB_TOKEN]
+        artifacts:
+          upload:
+            - path: "/artifacts/*.sarif"
+        timeout: 60m

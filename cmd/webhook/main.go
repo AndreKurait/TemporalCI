@@ -66,6 +66,10 @@ func main() {
 	http.HandleFunc("/api/repos", middleware.AuditLog(handleRepos))
 	http.HandleFunc("/api/repos/", middleware.AuditLog(handleRepoByName))
 	http.HandleFunc("/api/trigger/", middleware.AuditLog(handleManualTrigger))
+	http.HandleFunc("/api/locks", middleware.AuditLog(handleLocks))
+	http.HandleFunc("/api/locks/", middleware.AuditLog(handleLockForceRelease))
+	http.HandleFunc("/api/lock-pools", middleware.AuditLog(handleLockPools))
+	http.HandleFunc("/api/artifacts/", middleware.AuditLog(handleArtifacts))
 	http.HandleFunc("/dashboard", handleDashboard)
 
 	slog.Info("starting webhook server", "port", cfg.WebhookPort)
@@ -544,4 +548,90 @@ func verifySignature(payload []byte, signature, secret string) bool {
 	mac.Write(payload)
 	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+// handleLocks returns current lock state via Temporal query.
+func handleLocks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	resp, err := temporalClient.QueryWorkflow(r.Context(), "lock-manager", "", "state")
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"locks": []interface{}{}, "error": err.Error()})
+		return
+	}
+	var state interface{}
+	if err := resp.Get(&state); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"locks": []interface{}{}})
+		return
+	}
+	json.NewEncoder(w).Encode(state)
+}
+
+// handleLockForceRelease force-releases a lock. DELETE /api/locks/{resource}
+func handleLockForceRelease(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	resource := strings.TrimPrefix(r.URL.Path, "/api/locks/")
+	if resource == "" {
+		http.Error(w, "resource required", http.StatusBadRequest)
+		return
+	}
+
+	err := temporalClient.SignalWorkflow(r.Context(), "lock-manager", "", "release", map[string]string{
+		"resource": resource, "requester": "admin-force-release",
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleLockPools registers a lock pool. POST /api/lock-pools
+func handleLockPools(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var pool struct {
+		Label     string   `json:"label"`
+		Resources []string `json:"resources"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&pool); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	err := temporalClient.SignalWorkflow(r.Context(), "lock-manager", "", "register-pool", pool)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(pool)
+}
+
+// handleArtifacts lists artifacts. GET /api/artifacts/{owner}/{repo}/{workflowID}
+func handleArtifacts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	// Path: /api/artifacts/owner/repo/workflowID
+	path := strings.TrimPrefix(r.URL.Path, "/api/artifacts/")
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 3 {
+		http.Error(w, "path: /api/artifacts/{owner}/{repo}/{workflowID}", http.StatusBadRequest)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{
+		"repo": parts[0] + "/" + parts[1], "workflowID": parts[2],
+		"note": "artifact listing requires S3 access — use the worker's ListArtifacts activity",
+	})
 }

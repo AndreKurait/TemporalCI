@@ -75,7 +75,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 
 	// 7. Run post steps (disconnected context — survives cancellation)
 	dCtx, _ := workflow.NewDisconnectedContext(ctx)
-	runPostSteps(dCtx, acts, cloneResult.Steps, input, cloneResult.Dir, resolvedSecrets, paramEnv, allOutputs, overallStatus)
+	runPostStepsFromConfig(dCtx, acts, cloneResult.Post, input, cloneResult.Dir, resolvedSecrets, paramEnv, allOutputs, overallStatus)
 
 	// 8. Report
 	currentStatus = "reporting"
@@ -265,6 +265,26 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 			continue
 		}
 
+		// Child pipeline trigger step
+		if step.Trigger != nil {
+			result, err := runChildPipeline(ctx, *step.Trigger, input)
+			if err != nil {
+				result.Status = "failed"
+				overallStatus = "failed"
+			}
+			if result.Status == "failed" {
+				overallStatus = "failed"
+			}
+			if len(result.Outputs) > 0 {
+				allOutputs[step.Name] = result.Outputs
+			}
+			results = append(results, result)
+			if result.Status == "passed" || result.Status == "triggered" {
+				completed[step.Name] = true
+			}
+			continue
+		}
+
 		// Regular step
 		start := workflow.Now(ctx)
 		stepEnv := mergeEnv(paramEnv, flattenOutputs(allOutputs))
@@ -285,6 +305,67 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 		for _, svc := range step.Services {
 			stepInput.Services = append(stepInput.Services, svc)
 		}
+		if step.AWSRole != nil {
+			stepInput.AWSRole = step.AWSRole
+		}
+		if step.Artifacts != nil {
+			stepInput.ArtifactUpload = step.Artifacts.Upload
+			stepInput.ArtifactDownload = step.Artifacts.Download
+		}
+
+		// Lock handling
+		var lockResource string
+		if step.Lock != "" {
+			lockTimeout := step.LockTimeout
+			if lockTimeout == "" {
+				lockTimeout = "30m"
+			}
+			res, err := AcquireLock(ctx, step.Lock, "", ParseTimeout(lockTimeout, 30*time.Minute))
+			if err != nil {
+				results = append(results, activities.StepResult{Name: step.Name, Status: "failed", Output: err.Error()})
+				overallStatus = "failed"
+				continue
+			}
+			lockResource = res
+		} else if step.LockPool != nil {
+			lockTimeout := step.LockTimeout
+			if lockTimeout == "" {
+				lockTimeout = "30m"
+			}
+			res, err := AcquireLock(ctx, "", step.LockPool.Label, ParseTimeout(lockTimeout, 30*time.Minute))
+			if err != nil {
+				results = append(results, activities.StepResult{Name: step.Name, Status: "failed", Output: err.Error()})
+				overallStatus = "failed"
+				continue
+			}
+			lockResource = res
+			stepSecrets["LOCK_RESOURCE"] = res
+		}
+
+		// AWS role assumption
+		if step.AWSRole != nil {
+			var creds activities.AssumeRoleResult
+			stsCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+				StartToCloseTimeout: 30 * time.Second,
+				RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+			})
+			err := workflow.ExecuteActivity(stsCtx, acts.AssumeRole, activities.AssumeRoleInput{
+				RoleARN:     step.AWSRole.ARN,
+				SessionName: step.AWSRole.SessionName,
+				Duration:    int32(step.AWSRole.Duration),
+			}).Get(ctx, &creds)
+			if err != nil {
+				if lockResource != "" {
+					ReleaseLock(ctx, lockResource)
+				}
+				results = append(results, activities.StepResult{Name: step.Name, Status: "failed", Output: err.Error()})
+				overallStatus = "failed"
+				continue
+			}
+			stepSecrets["AWS_ACCESS_KEY_ID"] = creds.AccessKeyID
+			stepSecrets["AWS_SECRET_ACCESS_KEY"] = creds.SecretAccessKey
+			stepSecrets["AWS_SESSION_TOKEN"] = creds.SessionToken
+		}
 
 		var r activities.RunStepResult
 		err := workflow.ExecuteActivity(withStepOptions(ctx, step.Timeout), acts.RunStep, stepInput).Get(ctx, &r)
@@ -301,6 +382,11 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 
 		if len(r.Outputs) > 0 {
 			allOutputs[step.Name] = r.Outputs
+		}
+
+		// Release lock after step completes
+		if lockResource != "" {
+			ReleaseLock(ctx, lockResource)
 		}
 
 		results = append(results, activities.StepResult{
@@ -370,16 +456,106 @@ func runMatrixStep(ctx workflow.Context, acts *activities.Activities, step activ
 	return childResults
 }
 
-func runPostSteps(ctx workflow.Context, acts *activities.Activities, steps []activities.StepConfig, input CIPipelineInput, dir string, secrets map[string]string, paramEnv map[string]string, allOutputs map[string]map[string]string, pipelineStatus string) {
-	// Find post config from the original steps metadata
-	// Post steps are passed via a separate mechanism — for now, look for steps with post markers
-	// In the full implementation, post config comes from the parsed pipeline config
-	// This is handled by the CloneRepo activity which returns post steps separately
+// runPostStepsFromConfig executes post steps with proper disconnected context handling.
+func runPostStepsFromConfig(ctx workflow.Context, acts *activities.Activities, post *activities.PostConfig, input CIPipelineInput, dir string, secrets map[string]string, paramEnv map[string]string, allOutputs map[string]map[string]string, pipelineStatus string) {
+	if post == nil {
+		return
+	}
 
-	// For now, post steps would be injected by the caller or stored in workflow state
-	// The actual post config parsing happens in the config layer
-	_ = allOutputs
-	_ = pipelineStatus
+	// Merge all outputs into env for post steps
+	env := mergeEnv(paramEnv, flattenOutputs(allOutputs))
+	env["PIPELINE_STATUS"] = pipelineStatus
+
+	// Always steps
+	for _, step := range post.Always {
+		runSinglePostStep(ctx, acts, step, input, dir, secrets, env)
+	}
+
+	// On-failure steps
+	if pipelineStatus == "failed" || pipelineStatus == "cancelled" {
+		for _, step := range post.OnFailure {
+			runSinglePostStep(ctx, acts, step, input, dir, secrets, env)
+		}
+	}
+}
+
+func runSinglePostStep(ctx workflow.Context, acts *activities.Activities, step activities.StepConfig, input CIPipelineInput, dir string, secrets map[string]string, env map[string]string) {
+	stepSecrets := buildStepSecrets(step, secrets)
+	for k, v := range env {
+		stepSecrets[k] = v
+	}
+
+	timeout := step.Timeout
+	if timeout == "" {
+		timeout = "30m"
+	}
+
+	stepInput := activities.RunStepInput{
+		Dir: dir, Command: step.GetEffectiveCommand(), Name: step.Name, Image: step.Image,
+		Repo: input.Repo, Ref: input.Ref, Secrets: stepSecrets,
+		Docker: step.Docker, Privileged: step.Privileged,
+	}
+	if step.Resources != nil {
+		stepInput.Resources = step.Resources
+	}
+
+	// Post steps don't fail the pipeline — log errors but continue
+	var r activities.RunStepResult
+	_ = workflow.ExecuteActivity(withStepOptions(ctx, timeout), acts.RunStep, stepInput).Get(ctx, &r)
+}
+
+// runChildPipeline triggers a child pipeline and optionally waits for it.
+func runChildPipeline(ctx workflow.Context, trigger activities.TriggerStep, input CIPipelineInput) (activities.StepResult, error) {
+	childInput := CIPipelineInput{
+		Event:        input.Event,
+		Repo:         input.Repo,
+		Ref:          input.Ref,
+		HeadSHA:      input.HeadSHA,
+		PipelineName: trigger.Pipeline,
+		Parameters:   trigger.Parameters,
+		SecretsPrefix: input.SecretsPrefix,
+	}
+
+	childOpts := workflow.ChildWorkflowOptions{
+		WorkflowID: fmt.Sprintf("%s-child-%s", workflow.GetInfo(ctx).WorkflowExecution.ID, trigger.Pipeline),
+	}
+	childCtx := workflow.WithChildOptions(ctx, childOpts)
+
+	start := workflow.Now(ctx)
+	future := workflow.ExecuteChildWorkflow(childCtx, CIPipeline, childInput)
+
+	if !trigger.Wait {
+		// Fire and forget
+		return activities.StepResult{
+			Name:   trigger.Pipeline,
+			Status: "triggered",
+		}, nil
+	}
+
+	var childResult CIPipelineResult
+	err := future.Get(ctx, &childResult)
+	duration := workflow.Now(ctx).Sub(start).Seconds()
+
+	status := childResult.Status
+	if err != nil {
+		status = "failed"
+	}
+
+	result := activities.StepResult{
+		Name:     trigger.Pipeline,
+		Status:   status,
+		Duration: duration,
+		Outputs: map[string]string{
+			"CHILD_RESULT":   status,
+			"CHILD_DURATION": fmt.Sprintf("%.1f", duration),
+		},
+	}
+
+	if !trigger.PropagateFailure && status == "failed" {
+		result.Status = "passed" // parent doesn't fail
+	}
+
+	return result, nil
 }
 
 func buildStepSecrets(step activities.StepConfig, resolved map[string]string) map[string]string {

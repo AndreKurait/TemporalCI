@@ -115,6 +115,10 @@ export default defineConfig({
           },
         },
         {
+          tag: 'script',
+          attrs: { type: 'module', src: 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs' },
+        },
+        {
           tag: 'meta',
           attrs: { property: 'og:image', content: 'https://andrekurait.github.io/TemporalCI/og-image.png' },
         },

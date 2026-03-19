@@ -5,9 +5,11 @@ go 1.26.0
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.9
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.62
+	github.com/aws/aws-sdk-go-v2/service/eks v1.65.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.79.3
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.35.7
-	github.com/aws/aws-sdk-go-v2/service/eks v1.65.2
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17
 	github.com/expr-lang/expr v1.16.9
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/go-github/v70 v70.0.0
