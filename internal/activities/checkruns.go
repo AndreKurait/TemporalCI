@@ -11,10 +11,11 @@ import (
 
 // CheckRunInput defines the input for creating GitHub Check Runs.
 type CheckRunInput struct {
-	Repo       string       `json:"repo"`
-	HeadSHA    string       `json:"headSHA"`
-	Steps      []StepResult `json:"steps"`
-	WorkflowID string       `json:"workflowID"`
+	Repo         string       `json:"repo"`
+	HeadSHA      string       `json:"headSHA"`
+	Steps        []StepResult `json:"steps"`
+	WorkflowID   string       `json:"workflowID"`
+	PipelineName string       `json:"pipelineName,omitempty"`
 }
 
 // CreateCheckRuns creates GitHub Check Runs with per-step annotations.

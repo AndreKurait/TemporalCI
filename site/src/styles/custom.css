@@ -64,16 +64,15 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   display: none;
 }
 
-/* Landing page styles */
+/* Landing page — map to Starlight's theme-aware variables */
 .landing-page {
-  --bg-primary: #0a0a0a;
-  --bg-surface: #141414;
-  --bg-surface-hover: #1a1a1a;
-  --border-subtle: #262626;
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1a1;
-  --text-muted: #737373;
-  --accent: #6d5bf7;
+  --bg-primary: var(--sl-color-black);
+  --bg-surface: var(--sl-color-gray-6);
+  --border-subtle: var(--sl-color-gray-5);
+  --text-primary: var(--sl-color-white);
+  --text-secondary: var(--sl-color-gray-3);
+  --text-muted: var(--sl-color-gray-4);
+  --accent: var(--sl-color-accent);
   --accent-glow: rgba(109, 91, 247, 0.15);
   --success: #22c55e;
   --error: #ef4444;

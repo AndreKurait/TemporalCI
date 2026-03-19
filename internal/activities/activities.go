@@ -68,22 +68,51 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 		return CloneResult{}, fmt.Errorf("git clone: %w", err)
 	}
 
-	var steps []StepConfig
-	if pCfg, err := config.LoadPipelineConfig(dir); err == nil {
-		for _, s := range pCfg.Steps {
-			sc := StepConfig{
-				Name: s.Name, Image: s.Image, Command: s.Command,
-				Timeout: s.Timeout, DependsOn: s.DependsOn,
-				Secrets: s.Secrets,
-			}
-			if s.Resources != nil {
-				sc.Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
-			}
-			steps = append(steps, sc)
+	result := CloneResult{Dir: dir}
+
+	pCfg, err := config.LoadPipelineConfig(dir)
+	if err != nil {
+		return result, nil
+	}
+
+	// Determine which pipeline to use
+	pipelines := pCfg.GetPipelines()
+	for name := range pipelines {
+		result.Pipelines = append(result.Pipelines, name)
+	}
+
+	pipelineName := input.PipelineName
+	if pipelineName == "" {
+		pipelineName = "default"
+	}
+
+	p, ok := pipelines[pipelineName]
+	if !ok {
+		// Fall back to first pipeline
+		for _, pp := range pipelines {
+			p = pp
+			break
 		}
 	}
 
-	return CloneResult{Dir: dir, Steps: steps}, nil
+	if p != nil {
+		for _, s := range p.Steps {
+			sc := convertStepConfig(s)
+			result.Steps = append(result.Steps, sc)
+		}
+		if p.Post != nil {
+			post := &PostConfig{}
+			for _, s := range p.Post.Always {
+				post.Always = append(post.Always, convertStepConfig(s))
+			}
+			for _, s := range p.Post.OnFailure {
+				post.OnFailure = append(post.OnFailure, convertStepConfig(s))
+			}
+			result.Post = post
+		}
+	}
+
+	return result, nil
 }
 
 // RunStep executes a single CI step as a K8s pod or locally.
@@ -106,10 +135,13 @@ func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunSte
 	podName := fmt.Sprintf("ci-%s-%s", input.Name, hex.EncodeToString(h[:6]))
 
 	spec := k8s.PodSpec{
-		Name:      podName,
-		Namespace: a.namespace(),
-		Image:     input.Image,
-		Command:   []string{"sh", "-c", input.Command},
+		Name:           podName,
+		Namespace:      a.namespace(),
+		Image:          input.Image,
+		Command:        []string{"sh", "-c", input.Command},
+		Docker:         input.Docker,
+		Privileged:     input.Privileged,
+		CollectOutputs: input.CollectOutputs,
 	}
 	if input.Repo != "" {
 		spec.CloneURL = fmt.Sprintf("https://github.com/%s.git", input.Repo)
@@ -126,9 +158,34 @@ func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunSte
 		spec.NodeSelector = map[string]string{"workload": "ci-jobs"}
 	}
 
-	// Inject secrets as env vars
-	if len(input.Secrets) > 0 {
-		spec.Env = input.Secrets
+	// Build env vars: secrets + matrix vars
+	env := make(map[string]string)
+	for k, v := range input.Secrets {
+		env[k] = v
+	}
+	for k, v := range input.MatrixVars {
+		env["MATRIX_"+strings.ToUpper(k)] = v
+	}
+	if len(env) > 0 {
+		spec.Env = env
+	}
+
+	// Service containers
+	for _, svc := range input.Services {
+		ss := k8s.ServiceSpec{
+			Name:  svc.Name,
+			Image: svc.Image,
+			Ports: svc.Ports,
+			Env:   svc.Env,
+		}
+		if svc.Health != nil {
+			ss.Health = &k8s.HealthSpec{
+				Cmd:      svc.Health.Cmd,
+				Interval: svc.Health.Interval,
+				Retries:  svc.Health.Retries,
+			}
+		}
+		spec.Services = append(spec.Services, ss)
 	}
 
 	result, err := k8s.RunPod(ctx, a.K8sClient, spec)
@@ -155,6 +212,7 @@ func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunSte
 		ExitCode: result.ExitCode,
 		Output:   TruncateOutput(result.Logs, 4000),
 		LogURL:   logURL,
+		Outputs:  result.Outputs,
 	}, nil
 }
 
@@ -357,4 +415,68 @@ func runCmd(ctx context.Context, dir, name string, args ...string) error {
 		return fmt.Errorf("%s: %s", err, string(out))
 	}
 	return nil
+}
+
+func convertStepConfig(s config.StepConfig) StepConfig {
+	sc := StepConfig{
+		Name: s.Name, Image: s.Image, Command: s.GetCommand(),
+		Commands: s.Commands, Timeout: s.Timeout, DependsOn: s.DependsOn,
+		Secrets: s.Secrets, When: s.When, Type: s.Type,
+		Docker: s.Docker, Privileged: s.Privileged,
+		Lock: s.Lock, AllowSkip: s.AllowSkip,
+	}
+	if s.Resources != nil {
+		sc.Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
+	}
+	if s.Matrix != nil {
+		sc.Matrix = &MatrixConfig{
+			Dimensions: s.Matrix.Dimensions,
+			Exclude:    s.Matrix.Exclude,
+			Include:    s.Matrix.Include,
+			MaxParallel: s.Matrix.MaxParallel,
+		}
+		if s.Matrix.FailFast != nil {
+			sc.Matrix.FailFast = *s.Matrix.FailFast
+		}
+	}
+	for _, svc := range s.Services {
+		ss := ServiceConfig{Name: svc.Name, Image: svc.Image, Ports: svc.Ports, Env: svc.Env}
+		if svc.Health != nil {
+			ss.Health = &HealthCheck{Cmd: svc.Health.Cmd, Interval: svc.Health.Interval, Retries: svc.Health.Retries}
+		}
+		sc.Services = append(sc.Services, ss)
+	}
+	if s.Artifacts != nil {
+		sc.Artifacts = &ArtifactConfig{}
+		for _, u := range s.Artifacts.Upload {
+			sc.Artifacts.Upload = append(sc.Artifacts.Upload, ArtifactUpload{Path: u.Path})
+		}
+		for _, d := range s.Artifacts.Download {
+			sc.Artifacts.Download = append(sc.Artifacts.Download, ArtifactDownload{
+				FromStep: d.FromStep, FromPipeline: d.FromPipeline, Path: d.Path,
+			})
+		}
+	}
+	if s.AWSRole != nil {
+		sc.AWSRole = &AWSRoleConfig{ARN: s.AWSRole.ARN, Duration: s.AWSRole.Duration, SessionName: s.AWSRole.SessionName}
+	}
+	if s.Trigger != nil {
+		sc.Trigger = &TriggerStep{
+			Pipeline: s.Trigger.Pipeline, Parameters: s.Trigger.Parameters,
+		}
+		if s.Trigger.Wait != nil {
+			sc.Trigger.Wait = *s.Trigger.Wait
+		} else {
+			sc.Trigger.Wait = true
+		}
+		if s.Trigger.PropagateFailure != nil {
+			sc.Trigger.PropagateFailure = *s.Trigger.PropagateFailure
+		} else {
+			sc.Trigger.PropagateFailure = true
+		}
+	}
+	if s.LockPool != nil {
+		sc.LockPool = &LockPoolRef{Label: s.LockPool.Label, Quantity: s.LockPool.Quantity}
+	}
+	return sc
 }

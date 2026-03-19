@@ -64,7 +64,7 @@ func TestShouldRun_NoFilter(t *testing.T) {
 func TestShouldRun_PushFilter(t *testing.T) {
 	cfg := &PipelineConfig{
 		On: &TriggerConfig{
-			Push: &BranchFilter{Branches: []string{"main", "develop"}},
+			Push: &PushFilter{Branches: []string{"main", "develop"}},
 		},
 	}
 	if !cfg.ShouldRun("push", "main") {
@@ -89,15 +89,48 @@ func TestShouldRun_PRFilter(t *testing.T) {
 	}
 }
 
+func TestShouldRun_TagFilter(t *testing.T) {
+	cfg := &PipelineConfig{
+		On: &TriggerConfig{
+			Push: &PushFilter{Tags: []string{"*"}},
+		},
+	}
+	if !cfg.ShouldRun("push", "v1.0.0") {
+		t.Error("should run for tag push with wildcard")
+	}
+}
+
+func TestShouldRun_Schedule(t *testing.T) {
+	cfg := &PipelineConfig{
+		On: &TriggerConfig{
+			Schedule: []ScheduleEntry{{Cron: "0 22 * * *"}},
+		},
+	}
+	if !cfg.ShouldRun("schedule", "") {
+		t.Error("should run for schedule event")
+	}
+}
+
+func TestShouldRun_Release(t *testing.T) {
+	cfg := &PipelineConfig{
+		On: &TriggerConfig{
+			Release: &ReleaseFilter{Types: []string{"published"}},
+		},
+	}
+	if !cfg.ShouldRun("release", "") {
+		t.Error("should run for release event")
+	}
+}
+
 func TestMatchingEnvironments(t *testing.T) {
 	cfg := &PipelineConfig{
 		Environments: map[string]*EnvConfig{
 			"staging": {
-				On: &TriggerConfig{Push: &BranchFilter{Branches: []string{"main"}}},
+				On:    &TriggerConfig{Push: &PushFilter{Branches: []string{"main"}}},
 				Steps: []StepConfig{{Name: "deploy-staging", Command: "deploy"}},
 			},
 			"production": {
-				On:       &TriggerConfig{Push: &BranchFilter{Branches: []string{"release"}}},
+				On:       &TriggerConfig{Push: &PushFilter{Branches: []string{"release"}}},
 				Approval: true,
 				Steps:    []StepConfig{{Name: "deploy-prod", Command: "deploy"}},
 			},
@@ -194,4 +227,372 @@ environments:
 	if !cfg.Environments["production"].Approval {
 		t.Error("production should require approval")
 	}
+}
+
+func TestMultiPipelineConfig(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `pipelines:
+  eks-integ-test:
+    on:
+      push:
+        branches: [main]
+    steps:
+      - name: test
+        command: ./run-eks-test.sh
+  nightly:
+    on:
+      schedule:
+        - cron: "0 22 * * *"
+    steps:
+      - name: matrix
+        command: ./run-matrix.sh
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pipelines := cfg.GetPipelines()
+	if len(pipelines) != 2 {
+		t.Fatalf("expected 2 pipelines, got %d", len(pipelines))
+	}
+	if _, ok := pipelines["eks-integ-test"]; !ok {
+		t.Error("missing eks-integ-test pipeline")
+	}
+	if _, ok := pipelines["nightly"]; !ok {
+		t.Error("missing nightly pipeline")
+	}
+	if len(pipelines["nightly"].On.Schedule) != 1 {
+		t.Error("nightly should have 1 schedule")
+	}
+}
+
+func TestGetPipelines_FlatFormat(t *testing.T) {
+	cfg := &PipelineConfig{
+		Steps: []StepConfig{{Name: "build", Command: "go build"}},
+	}
+	pipelines := cfg.GetPipelines()
+	if len(pipelines) != 1 {
+		t.Fatalf("expected 1 pipeline, got %d", len(pipelines))
+	}
+	if _, ok := pipelines["default"]; !ok {
+		t.Error("flat format should produce 'default' pipeline")
+	}
+}
+
+func TestResolveParameters(t *testing.T) {
+	params := []ParameterConfig{
+		{Name: "STAGE", Type: "string", Default: "integ-1"},
+		{Name: "VERSION", Type: "choice", Options: []string{"v1", "v2"}, Default: "v1"},
+		{Name: "DRY_RUN", Type: "boolean", Default: "false"},
+	}
+
+	env, err := ResolveParameters(params, map[string]string{"STAGE": "integ-2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env["STAGE"] != "integ-2" {
+		t.Errorf("STAGE = %q, want integ-2", env["STAGE"])
+	}
+	if env["VERSION"] != "v1" {
+		t.Errorf("VERSION = %q, want v1 (default)", env["VERSION"])
+	}
+	if env["DRY_RUN"] != "false" {
+		t.Errorf("DRY_RUN = %q, want false", env["DRY_RUN"])
+	}
+}
+
+func TestResolveParameters_InvalidChoice(t *testing.T) {
+	params := []ParameterConfig{
+		{Name: "V", Type: "choice", Options: []string{"a", "b"}},
+	}
+	_, err := ResolveParameters(params, map[string]string{"V": "c"})
+	if err == nil {
+		t.Error("expected error for invalid choice")
+	}
+}
+
+func TestResolveParameters_InvalidBoolean(t *testing.T) {
+	params := []ParameterConfig{
+		{Name: "X", Type: "boolean"},
+	}
+	_, err := ResolveParameters(params, map[string]string{"X": "maybe"})
+	if err == nil {
+		t.Error("expected error for invalid boolean")
+	}
+}
+
+func TestValidate_CircularDeps(t *testing.T) {
+	cfg := &PipelineConfig{
+		Steps: []StepConfig{
+			{Name: "a", DependsOn: []string{"b"}},
+			{Name: "b", DependsOn: []string{"a"}},
+		},
+	}
+	errs := cfg.Validate()
+	found := false
+	for _, e := range errs {
+		if contains(e, "circular") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected circular dependency error, got %v", errs)
+	}
+}
+
+func TestValidate_UnknownDep(t *testing.T) {
+	cfg := &PipelineConfig{
+		Steps: []StepConfig{
+			{Name: "a", DependsOn: []string{"nonexistent"}},
+		},
+	}
+	errs := cfg.Validate()
+	if len(errs) == 0 {
+		t.Error("expected unknown dep error")
+	}
+}
+
+func TestValidate_ChoiceNoOptions(t *testing.T) {
+	cfg := &PipelineConfig{
+		Pipelines: map[string]*Pipeline{
+			"test": {
+				Parameters: []ParameterConfig{{Name: "X", Type: "choice"}},
+				Steps:      []StepConfig{{Name: "a"}},
+			},
+		},
+	}
+	errs := cfg.Validate()
+	if len(errs) == 0 {
+		t.Error("expected choice-no-options error")
+	}
+}
+
+func TestPostConfig(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: test
+    command: ./test.sh
+post:
+  always:
+    - name: cleanup
+      command: ./destroy.sh
+      timeout: 60m
+  on_failure:
+    - name: notify
+      command: curl $SLACK_WEBHOOK
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Post == nil {
+		t.Fatal("post should not be nil")
+	}
+	if len(cfg.Post.Always) != 1 {
+		t.Errorf("expected 1 always step, got %d", len(cfg.Post.Always))
+	}
+	if len(cfg.Post.OnFailure) != 1 {
+		t.Errorf("expected 1 on_failure step, got %d", len(cfg.Post.OnFailure))
+	}
+	if cfg.Post.Always[0].Timeout != "60m" {
+		t.Errorf("cleanup timeout = %q, want 60m", cfg.Post.Always[0].Timeout)
+	}
+}
+
+func TestServiceContainers(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: e2e
+    docker: true
+    services:
+      - name: postgres
+        image: postgres:16
+        ports: [5432]
+        health:
+          cmd: pg_isready
+          interval: 10s
+          retries: 30
+    command: ./test.sh
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := cfg.Steps[0]
+	if !step.Docker {
+		t.Error("docker should be true")
+	}
+	if len(step.Services) != 1 {
+		t.Fatalf("expected 1 service, got %d", len(step.Services))
+	}
+	svc := step.Services[0]
+	if svc.Name != "postgres" {
+		t.Errorf("service name = %q", svc.Name)
+	}
+	if svc.Health == nil || svc.Health.Retries != 30 {
+		t.Error("health check not parsed correctly")
+	}
+}
+
+func TestConditionalStep(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: deploy-vpc
+    when: "$VPC_MODE == 'create'"
+    command: ./create-vpc.sh
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Steps[0].When != "$VPC_MODE == 'create'" {
+		t.Errorf("when = %q", cfg.Steps[0].When)
+	}
+}
+
+func TestStepCommands(t *testing.T) {
+	step := StepConfig{Commands: []string{"echo hello", "echo world"}}
+	if step.GetCommand() != "echo hello && echo world" {
+		t.Errorf("GetCommand() = %q", step.GetCommand())
+	}
+}
+
+func TestParametersParsing(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `parameters:
+  - name: STAGE
+    type: string
+    default: integ-1
+    description: Deployment stage
+  - name: SOURCE_VERSION
+    type: choice
+    options: [ES_7.10, ES_6.8]
+    default: ES_7.10
+  - name: SKIP_CLEANUP
+    type: boolean
+    default: "false"
+steps:
+  - name: deploy
+    command: ./deploy.sh
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Parameters) != 3 {
+		t.Fatalf("expected 3 parameters, got %d", len(cfg.Parameters))
+	}
+	if cfg.Parameters[1].Type != "choice" {
+		t.Errorf("param[1].Type = %q", cfg.Parameters[1].Type)
+	}
+	if len(cfg.Parameters[1].Options) != 2 {
+		t.Errorf("param[1].Options = %v", cfg.Parameters[1].Options)
+	}
+}
+
+func TestGateStep(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: build
+    command: go build
+  - name: test
+    command: go test
+  - name: all-checks-pass
+    type: gate
+    depends_on: [build, test]
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Steps[2].Type != "gate" {
+		t.Errorf("step type = %q, want gate", cfg.Steps[2].Type)
+	}
+}
+
+func TestArtifactConfig(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: test
+    command: pytest
+    artifacts:
+      upload:
+        - path: /artifacts/report.xml
+  - name: aggregate
+    depends_on: [test]
+    artifacts:
+      download:
+        - from_step: test
+          path: /artifacts/
+    command: cat /artifacts/report.xml
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Steps[0].Artifacts.Upload) != 1 {
+		t.Error("expected 1 upload artifact")
+	}
+	if len(cfg.Steps[1].Artifacts.Download) != 1 {
+		t.Error("expected 1 download artifact")
+	}
+	if cfg.Steps[1].Artifacts.Download[0].FromStep != "test" {
+		t.Errorf("from_step = %q", cfg.Steps[1].Artifacts.Download[0].FromStep)
+	}
+}
+
+func TestTriggerStep(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: run-child
+    trigger:
+      pipeline: k8s-local-test
+      parameters:
+        SOURCE_VERSION: ES_7.10
+      wait: true
+      propagate_failure: false
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := cfg.Steps[0].Trigger
+	if tr == nil {
+		t.Fatal("trigger should not be nil")
+	}
+	if tr.Pipeline != "k8s-local-test" {
+		t.Errorf("pipeline = %q", tr.Pipeline)
+	}
+	if *tr.PropagateFailure != false {
+		t.Error("propagate_failure should be false")
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
+}
+
+func containsStr(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
