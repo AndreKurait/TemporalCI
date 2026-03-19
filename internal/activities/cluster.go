@@ -2,7 +2,6 @@ package activities
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -218,8 +217,7 @@ users:
       apiVersion: client.authentication.k8s.io/v1beta1
       command: aws
       args: ["--region", "%s", "eks", "get-token", "--cluster-name", "%s", "--output", "json"]
-`, endpoint, base64.StdEncoding.EncodeToString([]byte(caData)),
-		name, name, name, name, name, name, region, name)
+`, endpoint, caData, name, name, name, name, name, name, region, name)
 }
 
 func isAlreadyExists(err error) bool {
