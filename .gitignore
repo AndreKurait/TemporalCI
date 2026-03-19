@@ -31,3 +31,8 @@ deploy/helm/charts/
 # Secrets
 *.pem
 *.key
+
+# Site
+site/dist/
+site/node_modules/
+site/.astro/

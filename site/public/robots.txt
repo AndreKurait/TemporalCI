@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://andrekurait.github.io/TemporalCI/sitemap-index.xml
