@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -76,7 +77,11 @@ func (a *Activities) ProvisionCluster(ctx context.Context, input ClusterInput) (
 		},
 	})
 	if err != nil {
-		return ClusterResult{}, fmt.Errorf("create cluster: %w", err)
+		// Ignore "already exists" — cluster may be from a previous attempt
+		if !isAlreadyExists(err) {
+			return ClusterResult{}, fmt.Errorf("create cluster: %w", err)
+		}
+		log.Info("cluster already exists, waiting for it")
 	}
 
 	// Poll until ACTIVE
@@ -215,4 +220,8 @@ users:
       args: ["--region", "%s", "eks", "get-token", "--cluster-name", "%s", "--output", "json"]
 `, endpoint, base64.StdEncoding.EncodeToString([]byte(caData)),
 		name, name, name, name, name, name, region, name)
+}
+
+func isAlreadyExists(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "ResourceInUseException")
 }
