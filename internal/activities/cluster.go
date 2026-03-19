@@ -162,6 +162,10 @@ func (a *Activities) RunHelmTest(ctx context.Context, input HelmTestInput) (Helm
 		ns = "test"
 	}
 
+	// Pre-cleanup: uninstall any leftover release from a previous attempt
+	exec.CommandContext(ctx, "helm", "uninstall", input.ReleaseName,
+		"--kubeconfig", kubeconfigFile.Name(), "--namespace", ns, "--ignore-not-found").Run()
+
 	// Build helm install args
 	installArgs := []string{"install", input.ReleaseName, input.ChartPath,
 		"--kubeconfig", kubeconfigFile.Name(),
