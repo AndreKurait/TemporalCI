@@ -14,7 +14,7 @@
   --sl-color-gray-6: #24272f;
   --sl-color-black: #17181c;
   --sl-font: 'Inter', sans-serif;
-  --sl-font-mono: 'JetBrains Mono Variable', monospace;
+  --sl-font-mono: 'JetBrains Mono', monospace;
 }
 
 [data-theme='light'] {
@@ -237,7 +237,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 
 .terminal-body {
   padding: 1.25rem;
-  font-family: 'JetBrains Mono Variable', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.8125rem;
   line-height: 1.8;
   color: var(--text-secondary);
@@ -381,7 +381,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 }
 
 .annotation h4 {
-  font-family: 'JetBrains Mono Variable', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.8125rem;
   color: var(--accent);
   margin: 0 0 0.25rem;
@@ -411,8 +411,9 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 .feature-card:hover { border-color: var(--text-muted); }
 
 .feature-icon {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   margin-bottom: 0.75rem;
+  color: var(--accent);
 }
 
 .feature-card h3 {
@@ -505,7 +506,8 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
+  color: var(--accent);
   margin: 0 auto 0.75rem;
 }
 
@@ -528,7 +530,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   border: 1px solid var(--border-subtle);
   border-radius: 0.75rem;
   padding: 2rem;
-  font-family: 'JetBrains Mono Variable', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
   line-height: 1.6;
   overflow-x: auto;
@@ -579,7 +581,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   border: 1px solid var(--border-subtle);
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
-  font-family: 'JetBrains Mono Variable', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.8125rem;
   color: var(--text-secondary);
   overflow-x: auto;
@@ -644,6 +646,10 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   font-size: 1.125rem;
   color: var(--text-primary);
   text-decoration: none;
+}
+
+.landing-nav-logo i {
+  color: var(--accent);
 }
 
 .landing-nav-links {
@@ -751,7 +757,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   border: 1px solid var(--border-subtle);
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
-  font-family: 'JetBrains Mono Variable', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.8125rem;
   color: var(--text-secondary);
   line-height: 1.8;
