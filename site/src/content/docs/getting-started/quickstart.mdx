@@ -1,0 +1,237 @@
+---
+title: Quick Start
+description: Get TemporalCI running on minikube in 5 minutes.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Get TemporalCI running locally and trigger your first CI pipeline.
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- [minikube](https://minikube.sigs.k8s.io/docs/start/) (v1.32+)
+- [Helm 3](https://helm.sh/docs/intro/install/) (v3.14+)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- A GitHub repo to test with
+
+<Aside type="tip">
+No AWS account needed. Everything runs locally on minikube.
+</Aside>
+
+## Install TemporalCI
+
+<Steps>
+
+1. **Start minikube**
+
+   ```bash
+   minikube start --cpus=4 --memory=4096
+   ```
+
+   Expected output:
+   ```
+   ✅ minikube v1.34.0
+   ✅ Using the docker driver
+   ✅ Starting "minikube" ...
+   ✅ kubectl is now configured to use "minikube"
+   ```
+
+2. **Clone the TemporalCI repo**
+
+   ```bash
+   git clone https://github.com/AndreKurait/TemporalCI.git
+   cd TemporalCI
+   ```
+
+3. **Install with Helm**
+
+   ```bash
+   helm install temporalci ./deploy/helm -f deploy/helm/values-local.yaml
+   ```
+
+   Wait for all pods to be ready (~2 minutes):
+   ```bash
+   kubectl get pods -w
+   ```
+
+   You should see:
+   ```
+   NAME                                    READY   STATUS    RESTARTS
+   temporalci-temporal-frontend-0          1/1     Running   0
+   temporalci-temporal-history-0           1/1     Running   0
+   temporalci-temporal-matching-0          1/1     Running   0
+   temporalci-temporal-worker-0            1/1     Running   0
+   temporalci-worker-6d4f8b9c7-xxxxx      1/1     Running   0
+   temporalci-webhook-7b5c9d8e6-xxxxx     1/1     Running   0
+   temporalci-postgresql-0                 1/1     Running   0
+   ```
+
+4. **Create secrets**
+
+   ```bash
+   kubectl create secret generic temporalci-secrets \
+     --from-literal=github-webhook-secret=dev-secret \
+     --from-literal=github-token=ghp_YOUR_TOKEN_HERE
+   ```
+
+   <Aside type="note">
+   Replace `ghp_YOUR_TOKEN_HERE` with a [GitHub personal access token](https://github.com/settings/tokens) that has `repo` and `statuses` permissions.
+   </Aside>
+
+</Steps>
+
+## Add a Pipeline to Your Repo
+
+Create `.temporalci.yaml` in your repository root:
+
+<Tabs>
+  <TabItem label="Go">
+```yaml
+steps:
+  - name: build
+    image: golang:1.23
+    command: go build ./...
+    timeout: 5m
+
+  - name: test
+    image: golang:1.23
+    command: go test -v ./...
+    timeout: 5m
+    depends_on: [build]
+
+  - name: vet
+    image: golang:1.23
+    command: go vet ./...
+    depends_on: [build]
+```
+  </TabItem>
+  <TabItem label="Node.js">
+```yaml
+steps:
+  - name: install
+    image: node:20
+    command: npm ci
+
+  - name: test
+    image: node:20
+    command: npm test
+    depends_on: [install]
+
+  - name: build
+    image: node:20
+    command: npm run build
+    depends_on: [install]
+```
+  </TabItem>
+  <TabItem label="Python">
+```yaml
+steps:
+  - name: install
+    image: python:3.12
+    command: pip install -r requirements.txt
+
+  - name: test
+    image: python:3.12
+    command: python -m pytest
+    depends_on: [install]
+
+  - name: lint
+    image: python:3.12
+    command: ruff check .
+    depends_on: [install]
+```
+  </TabItem>
+</Tabs>
+
+## Connect GitHub
+
+Set up the webhook so GitHub notifies TemporalCI on every push:
+
+<Steps>
+
+1. **Expose the webhook server** (for local testing):
+
+   ```bash
+   kubectl port-forward svc/temporalci-webhook 8080:8080
+   ```
+
+2. **Register your repo**:
+
+   ```bash
+   curl -X POST http://localhost:8080/api/repos \
+     -H "Content-Type: application/json" \
+     -d '{"fullName": "your-org/your-repo", "defaultBranch": "main"}'
+   ```
+
+   Or configure manually in GitHub → Settings → Webhooks:
+   - **Payload URL:** your webhook endpoint
+   - **Content type:** `application/json`
+   - **Secret:** `dev-secret` (matches the secret you created above)
+   - **Events:** Pushes and Pull requests
+
+</Steps>
+
+## Trigger a Build
+
+Push a commit or open a PR. TemporalCI will:
+
+1. Receive the webhook event
+2. Start a Temporal workflow
+3. Clone your repo and read `.temporalci.yaml`
+4. Run each step as an isolated K8s pod
+5. Report results back to your PR
+
+You'll see results on your PR:
+
+```markdown
+## TemporalCI Results — abc1234
+
+✅ build (12.5s)
+✅ test (20.2s)
+✅ vet (3.1s)
+
+3 passed, 0 failed in 35.8s
+
+🔗 View workflow in Temporal UI
+```
+
+## View the Temporal Web UI
+
+```bash
+kubectl port-forward svc/temporalci-temporal-web 8088:8088
+```
+
+Open [http://localhost:8088](http://localhost:8088) to see your workflow executions, activity details, and timing.
+
+## What Happens Under the Hood
+
+```
+git push → GitHub Webhook → Webhook Server → Temporal Workflow
+                                                    │
+                                              ┌─────┴─────┐
+                                              │  CloneRepo │
+                                              └─────┬─────┘
+                                              ┌─────┴─────┐
+                                         ┌────┤  RunStep   ├────┐
+                                         │    └───────────┘    │
+                                    ┌────┴────┐          ┌────┴────┐
+                                    │  build   │          │  vet    │
+                                    └────┬────┘          └─────────┘
+                                    ┌────┴────┐
+                                    │  test    │
+                                    └────┬────┘
+                                    ┌────┴────────┐
+                                    │ ReportResults│
+                                    └─────────────┘
+```
+
+If anything crashes mid-pipeline, Temporal replays the workflow and resumes from the last completed activity. No lost work.
+
+## Next Steps
+
+- [Pipeline Configuration](/TemporalCI/configuration/pipeline/) — full `.temporalci.yaml` reference
+- [Local Development](/TemporalCI/getting-started/local-dev/) — development workflow tips
+- [Architecture Overview](/TemporalCI/architecture/overview/) — how the system works
+- [EKS Deployment](/TemporalCI/production/eks-deployment/) — deploy to production

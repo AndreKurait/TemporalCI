@@ -1,0 +1,77 @@
+---
+title: What is TemporalCI?
+description: A Kubernetes-native CI system built on Temporal for durable, observable pipelines.
+---
+
+import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+TemporalCI is a **Kubernetes-native CI/CD system** that uses [Temporal](https://temporal.io/) for durable workflow orchestration. Every CI pipeline is a Temporal workflow — retryable, observable, and resilient to infrastructure failures.
+
+## The Problem It Solves
+
+Every CI system today treats pipelines as ephemeral processes. When a node crashes, a network blips, or a timeout fires — your build is gone. Start over.
+
+TemporalCI fixes this by treating pipelines as **durable workflows**:
+
+| Traditional CI | TemporalCI |
+|---|---|
+| Pipeline dies on crash | Workflow resumes from last completed step |
+| Retry = start entire pipeline over | Retry = re-execute only the failed step |
+| Logs disappear on failure | Every execution fully inspectable in Temporal UI |
+| Scaling = manage more runners | Scaling = K8s auto-provisions more pods |
+
+## How It Works
+
+1. You push code to GitHub
+2. GitHub sends a webhook to TemporalCI
+3. TemporalCI starts a Temporal workflow
+4. The workflow runs each CI step in an isolated K8s pod
+5. Results appear on your PR — commit status, comments, logs
+
+<Aside type="tip">
+If anything crashes mid-pipeline, Temporal replays the workflow and resumes from the last completed activity. No lost work.
+</Aside>
+
+## Key Features
+
+<CardGrid>
+  <Card title="Durable Pipelines" icon="rocket">
+    Powered by Temporal. Survives node failures, restarts, and evictions.
+  </Card>
+  <Card title="K8s-Native" icon="seti:docker">
+    Each step runs in its own pod. Resource limits, node isolation, auto-cleanup.
+  </Card>
+  <Card title="Simple Config" icon="document">
+    12 lines of `.temporalci.yaml`. No Groovy DSL. No nested YAML matrices.
+  </Card>
+  <Card title="One Helm Chart" icon="setting">
+    Same chart on minikube and EKS Auto Mode. Local dev in minutes.
+  </Card>
+</CardGrid>
+
+## Who It's For
+
+TemporalCI is built for teams that:
+
+- Run CI on their own infrastructure (not GitHub-hosted runners)
+- Want Kubernetes-native execution with proper pod isolation
+- Are tired of flaky pipelines that lose state on failure
+- Need full observability into CI execution (not just logs)
+- Want a simple, declarative pipeline config
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Language | Go |
+| Orchestration | Temporal (self-hosted) |
+| Execution | Kubernetes pods |
+| Infrastructure | EKS Auto Mode (prod) / minikube (local) |
+| Deployment | Helm + ArgoCD |
+| Database | PostgreSQL (in-cluster or RDS via ACK) |
+
+## Next Steps
+
+- **[Quick Start](/TemporalCI/getting-started/quickstart/)** — get running in 5 minutes
+- **[Architecture](/TemporalCI/architecture/overview/)** — understand how it works
+- **[Why Temporal?](/TemporalCI/concepts/why-temporal/)** — deep dive on the execution model

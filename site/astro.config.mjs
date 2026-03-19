@@ -22,6 +22,7 @@ export default defineConfig({
           label: 'Start Here',
           items: [
             { label: 'Overview', slug: '' },
+            { label: 'What is TemporalCI?', slug: 'getting-started/what-is-temporalci' },
             { label: 'Quick Start', slug: 'getting-started/quickstart' },
             { label: 'Local Development', slug: 'getting-started/local-dev' },
           ],
