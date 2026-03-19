@@ -56,6 +56,9 @@ type HelmTestResult struct {
 
 // ProvisionCluster creates an EKS Auto Mode cluster and waits for it to be ACTIVE.
 func (a *Activities) ProvisionCluster(ctx context.Context, input ClusterInput) (ClusterResult, error) {
+	if os.Getenv("AWS_ENDPOINT_URL") != "" {
+		return ClusterResult{}, fmt.Errorf("EKS cluster provisioning unavailable in local mode")
+	}
 	log := a.logger(ctx).With("cluster", input.Name)
 	log.Info("provisioning EKS cluster")
 
@@ -113,6 +116,9 @@ func (a *Activities) ProvisionCluster(ctx context.Context, input ClusterInput) (
 
 // DestroyCluster deletes an EKS cluster.
 func (a *Activities) DestroyCluster(ctx context.Context, input DestroyClusterInput) error {
+	if os.Getenv("AWS_ENDPOINT_URL") != "" {
+		return fmt.Errorf("EKS cluster operations unavailable in local mode")
+	}
 	log := a.logger(ctx).With("cluster", input.Name)
 	log.Info("destroying EKS cluster")
 
