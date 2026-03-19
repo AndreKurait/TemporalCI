@@ -394,4 +394,16 @@ hero:
   </div>
 </section>
 
+{/* ── Scroll animation ── */}
+<script is:inline>{`
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.landing-section').forEach(s => observer.observe(s));
+  } else {
+    document.querySelectorAll('.landing-section').forEach(s => s.classList.add('visible'));
+  }
+`}</script>
+
 </div>

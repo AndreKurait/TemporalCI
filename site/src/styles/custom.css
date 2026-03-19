@@ -766,3 +766,133 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   margin: 0 0 2rem;
   font-size: 1.0625rem;
 }
+
+/* ── Mobile Responsiveness ── */
+@media (max-width: 768px) {
+  .landing-nav {
+    padding: 0.75rem 1rem;
+  }
+
+  .landing-nav-links a:not(.gh-link) {
+    display: none;
+  }
+
+  .hero-section {
+    min-height: auto;
+    padding: 4rem 1rem 3rem;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .hero-actions a {
+    width: 100%;
+    max-width: 280px;
+    justify-content: center;
+  }
+
+  .terminal {
+    max-width: 100%;
+  }
+
+  .terminal-body {
+    font-size: 0.7rem;
+    padding: 1rem;
+  }
+
+  .landing-section {
+    padding: 3rem 1rem;
+  }
+
+  .pain-grid,
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .flow-steps {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .flow-step:not(:last-child)::after {
+    content: '↓';
+    position: static;
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 1rem;
+  }
+
+  .flow-step {
+    min-width: auto;
+  }
+
+  .arch-diagram {
+    font-size: 0.6rem;
+    padding: 1rem;
+  }
+
+  .comparison-table {
+    font-size: 0.75rem;
+  }
+
+  .comparison-table th,
+  .comparison-table td {
+    padding: 0.625rem 0.5rem;
+  }
+
+  .footer-cta {
+    padding: 4rem 1rem;
+  }
+
+  .footer-links {
+    gap: 1rem;
+  }
+}
+
+/* ── Scroll-triggered fade-in ── */
+.landing-section {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.landing-section.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-section {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ── Focus styles for a11y ── */
+.landing-page a:focus-visible,
+.landing-page button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* ── Smooth hover on feature cards ── */
+.feature-card {
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.feature-card:hover {
+  border-color: var(--text-muted);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-card:hover {
+    transform: none;
+  }
+}
