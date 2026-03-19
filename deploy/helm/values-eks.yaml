@@ -132,3 +132,22 @@ secrets:
     enabled: true
     githubWebhookSecret: ""  # Set via --set or K8s secret
     githubToken: ""  # Set via --set or K8s secret
+
+# --- Q1: CI node pool + S3 logs ---
+
+logs:
+  s3Bucket: ""  # Set via --set logs.s3Bucket=$LOG_BUCKET
+  awsRegion: "us-east-1"
+
+ciNodePool:
+  enabled: true
+
+cache:
+  goModules:
+    enabled: false  # Enable when EFS StorageClass is available
+    storageClass: "efs-sc"
+    size: "10Gi"
+  artifacts:
+    enabled: false
+    storageClass: "efs-sc"
+    size: "5Gi"

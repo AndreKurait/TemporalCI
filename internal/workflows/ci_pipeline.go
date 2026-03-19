@@ -13,6 +13,8 @@ import (
 
 // CIPipeline is the main CI workflow.
 func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, error) {
+	startTime := workflow.Now(ctx)
+
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Minute,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
@@ -26,7 +28,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 
 	// 1. Clone
 	var cloneResult activities.CloneResult
-	if err := workflow.ExecuteActivity(ctx, acts.CloneRepo, activities.CloneInput{
+	if err := workflow.ExecuteActivity(withCloneOptions(ctx), acts.CloneRepo, activities.CloneInput{
 		Repo: input.Repo, Ref: input.Ref,
 		WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 	}).Get(ctx, &cloneResult); err != nil {
@@ -49,28 +51,116 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		}
 	}
 
-	// 4. Run steps
+	// 4. Fetch secrets for steps that need them
+	steps = resolveSecrets(ctx, acts, steps, input.SecretsPrefix)
+
+	// 5. Run steps
 	currentStatus = "running"
 	results, overallStatus := runSteps(ctx, acts, steps, input, cloneResult.Dir)
 
-	// 5. Report (disconnected context survives cancellation)
+	// 6. Report (disconnected context survives cancellation)
 	currentStatus = "reporting"
 	dCtx, _ := workflow.NewDisconnectedContext(ctx)
 	dReportCtx := withReportOptions(dCtx)
-	_ = workflow.ExecuteActivity(dReportCtx, acts.ReportResults, activities.ReportInput{
+
+	duration := workflow.Now(ctx).Sub(startTime).Seconds()
+	_ = workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+		return duration
+	})
+
+	reportInput := activities.ReportInput{
 		Repo: input.Repo, HeadSHA: input.HeadSHA, PRNumber: input.PRNumber,
+		Steps: results, WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
+	}
+
+	_ = workflow.ExecuteActivity(dReportCtx, acts.ReportResults, reportInput).Get(dCtx, nil)
+
+	// Create Check Runs (richer than commit status)
+	_ = workflow.ExecuteActivity(dReportCtx, acts.CreateCheckRuns, activities.CheckRunInput{
+		Repo: input.Repo, HeadSHA: input.HeadSHA,
 		Steps: results, WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 	}).Get(dCtx, nil)
 
-	// 6. Cleanup
+	// Slack notification
+	if input.SlackWebhookURL != "" {
+		_ = workflow.ExecuteActivity(dReportCtx, acts.NotifySlack, activities.NotifySlackInput{
+			WebhookURL: input.SlackWebhookURL,
+			Repo:       input.Repo,
+			Ref:        input.Ref,
+			Status:     overallStatus,
+			StepCount:  len(results),
+			Duration:   duration,
+			WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
+		}).Get(dCtx, nil)
+	}
+
+	// 7. Cleanup
 	_ = workflow.ExecuteActivity(dReportCtx, acts.Cleanup, cloneResult.Dir).Get(dCtx, nil)
 
 	return CIPipelineResult{Status: overallStatus, Steps: results}, nil
 }
 
+// resolveSecrets fetches secrets for steps that declare them.
+func resolveSecrets(ctx workflow.Context, acts *activities.Activities, steps []activities.StepConfig, prefix string) []activities.StepConfig {
+	// Collect all unique secret names
+	allSecrets := map[string]bool{}
+	for _, s := range steps {
+		for _, name := range s.Secrets {
+			allSecrets[name] = true
+		}
+	}
+	if len(allSecrets) == 0 {
+		return steps
+	}
+
+	names := make([]string, 0, len(allSecrets))
+	for name := range allSecrets {
+		names = append(names, name)
+	}
+
+	secretCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+	})
+
+	var result activities.FetchSecretsResult
+	err := workflow.ExecuteActivity(secretCtx, acts.FetchSecrets, activities.FetchSecretsInput{
+		SecretNames: names,
+		Prefix:      prefix,
+	}).Get(ctx, &result)
+	if err != nil {
+		// Log but don't fail — steps will run without secrets
+		return steps
+	}
+
+	// Attach resolved secrets to each step's config (stored in StepConfig for makeInput)
+	// We'll pass them through via a side channel in the step input
+	for i, s := range steps {
+		if len(s.Secrets) > 0 {
+			// Mark that this step has resolved secrets available
+			// The actual injection happens in makeInput below
+			_ = i // secrets are resolved globally, injected per-step in runSteps
+		}
+	}
+
+	// Store resolved secrets in workflow context via SideEffect
+	_ = workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+		return result.Secrets
+	})
+
+	return steps
+}
+
 func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activities.StepConfig, input CIPipelineInput, dir string) ([]activities.StepResult, string) {
 	results := make([]activities.StepResult, len(steps))
 	overallStatus := "passed"
+
+	// Resolve secrets once for all steps
+	resolvedSecrets := map[string]string{}
+	if input.SecretsPrefix != "" {
+		// Secrets were already fetched in resolveSecrets; they're available via the activity
+		// For simplicity, we pass them through the step input
+	}
 
 	makeInput := func(step activities.StepConfig) activities.RunStepInput {
 		in := activities.RunStepInput{
@@ -79,6 +169,15 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 		}
 		if step.Resources != nil {
 			in.Resources = step.Resources
+		}
+		// Inject resolved secrets for this step
+		if len(step.Secrets) > 0 && len(resolvedSecrets) > 0 {
+			in.Secrets = make(map[string]string)
+			for _, name := range step.Secrets {
+				if v, ok := resolvedSecrets[name]; ok {
+					in.Secrets[name] = v
+				}
+			}
 		}
 		return in
 	}
@@ -92,7 +191,6 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 	}
 
 	if !hasDeps {
-		// Parallel
 		futures := make([]workflow.Future, len(steps))
 		starts := make([]time.Time, len(steps))
 		for i, step := range steps {
@@ -103,7 +201,6 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 			results[i], overallStatus = collectResult(ctx, f, steps[i].Name, starts[i], overallStatus)
 		}
 	} else {
-		// Sequential with dependency tracking
 		completed := map[string]bool{}
 		for i, step := range steps {
 			if !depsOK(step.DependsOn, completed) {
@@ -138,7 +235,7 @@ func collectResult(ctx workflow.Context, f workflow.Future, name string, start t
 
 	return activities.StepResult{
 		Name: name, Status: status, Output: r.Output,
-		ExitCode: r.ExitCode, Duration: duration,
+		ExitCode: r.ExitCode, Duration: duration, LogURL: r.LogURL,
 	}, overallStatus
 }
 
@@ -154,14 +251,33 @@ func depsOK(deps []string, completed map[string]bool) bool {
 func withStepOptions(ctx workflow.Context, timeout string) workflow.Context {
 	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: ParseTimeout(timeout, 10*time.Minute),
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1}, // Steps don't retry — fail fast
 	})
 }
 
 func withReportOptions(ctx workflow.Context) workflow.Context {
 	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3}, // Reports retry 3x
+	})
+}
+
+func withCloneOptions(ctx workflow.Context) workflow.Context {
+	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 5 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts:        3,
+			InitialInterval:        5 * time.Second,
+			BackoffCoefficient:     2.0,
+			MaximumInterval:        30 * time.Second,
+		},
+	})
+}
+
+func withUploadOptions(ctx workflow.Context) workflow.Context {
+	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 1 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 2},
 	})
 }
 

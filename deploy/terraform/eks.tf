@@ -1,3 +1,5 @@
+# --- EKS Auto Mode Cluster ---
+
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
@@ -10,6 +12,7 @@ resource "aws_eks_cluster" "this" {
     endpoint_public_access  = true
   }
 
+  # Auto Mode: EKS manages compute, scaling, bin-packing
   compute_config {
     enabled       = true
     node_pools    = ["general-purpose"]
@@ -42,65 +45,25 @@ resource "aws_eks_cluster" "this" {
   ]
 }
 
+# --- EKS Add-ons (managed by AWS, no node group dependency) ---
+
 resource "aws_eks_addon" "secrets_store_csi" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "aws-secrets-store-csi-driver-provider"
-  depends_on   = [aws_eks_node_group.workers]
 }
 
 resource "aws_eks_addon" "cloudwatch_observability" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "amazon-cloudwatch-observability"
-  depends_on   = [aws_eks_node_group.workers]
   timeouts { create = "30m" }
-}
-
-resource "aws_eks_addon" "vpc_cni" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "vpc-cni"
-  depends_on   = [aws_eks_node_group.workers]
-}
-
-resource "aws_eks_addon" "kube_proxy" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "kube-proxy"
-  depends_on   = [aws_eks_node_group.workers]
-}
-
-resource "aws_eks_addon" "coredns" {
-  cluster_name = aws_eks_cluster.this.name
-  addon_name   = "coredns"
-  depends_on   = [aws_eks_node_group.workers]
-}
-
-resource "aws_eks_addon" "ebs_csi" {
-  cluster_name             = aws_eks_cluster.this.name
-  addon_name               = "aws-ebs-csi-driver"
-  service_account_role_arn = aws_iam_role.ebs_csi.arn
-  depends_on               = [aws_eks_node_group.workers]
 }
 
 resource "aws_eks_addon" "pod_identity" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "eks-pod-identity-agent"
-  depends_on   = [aws_eks_node_group.workers]
 }
 
-# --- Managed Node Group ---
-
-resource "aws_eks_node_group" "workers" {
-  cluster_name    = aws_eks_cluster.this.name
-  node_group_name = "workers"
-  node_role_arn   = aws_iam_role.eks_node.arn
-  subnet_ids      = aws_subnet.private[*].id
-  instance_types  = ["t3.large"]
-
-  scaling_config {
-    desired_size = 2
-    min_size     = 2
-    max_size     = 4
-  }
-}
+# Note: vpc-cni, kube-proxy, coredns, ebs-csi are built into Auto Mode — no addon resources needed.
 
 # --- Access Entry ---
 
@@ -115,4 +78,18 @@ resource "aws_eks_pod_identity_association" "ebs_csi" {
   namespace       = "kube-system"
   service_account = "ebs-csi-controller-sa"
   role_arn        = aws_iam_role.ebs_csi.arn
+}
+
+# --- ACK Capability (provisions AWS resources as K8s CRDs) ---
+
+resource "aws_eks_addon" "ack_rds" {
+  cluster_name             = aws_eks_cluster.this.name
+  addon_name               = "ack-rds-controller"
+  service_account_role_arn = aws_iam_role.ack.arn
+}
+
+resource "aws_eks_addon" "ack_s3" {
+  cluster_name             = aws_eks_cluster.this.name
+  addon_name               = "ack-s3-controller"
+  service_account_role_arn = aws_iam_role.ack.arn
 }
