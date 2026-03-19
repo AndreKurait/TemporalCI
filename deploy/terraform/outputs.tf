@@ -17,3 +17,15 @@ output "ecr_repository_url" {
 output "vpc_id" {
   value = aws_vpc.this.id
 }
+
+output "ci_logs_bucket" {
+  value = aws_s3_bucket.ci_logs.bucket
+}
+
+output "rds_subnet_group" {
+  value = aws_db_subnet_group.temporal.name
+}
+
+output "ack_role_arn" {
+  value = aws_iam_role.ack.arn
+}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -15,32 +16,48 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/AndreKurait/TemporalCI/internal/config"
+	"github.com/AndreKurait/TemporalCI/internal/ghapp"
 	"github.com/AndreKurait/TemporalCI/internal/k8s"
+	"github.com/AndreKurait/TemporalCI/internal/metrics"
 )
 
 // Activities holds shared dependencies for all activity methods.
 type Activities struct {
 	K8sClient      kubernetes.Interface
 	GitHubToken    string
+	GitHubApp      *ghapp.Client // GitHub App auth (preferred over PAT)
 	TemporalWebURL string
-	Namespace      string // K8s namespace for CI pods, defaults to "default"
+	Namespace      string
+	S3Client       S3Uploader
+	S3Presigner    S3Presigner
+	LogBucket      string
+	CINodePool     bool
+	SecretsClient  SecretsClient
+	SecretsPrefix  string
 }
 
 func (a *Activities) namespace() string {
 	if a.Namespace != "" {
 		return a.Namespace
 	}
-	// Try to read from downward API
 	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
 		return strings.TrimSpace(string(ns))
 	}
 	return "default"
 }
 
+func (a *Activities) logger(ctx context.Context) *slog.Logger {
+	info := activity.GetInfo(ctx)
+	return slog.Default().With(
+		"workflowID", info.WorkflowExecution.ID,
+		"activityType", info.ActivityType.Name,
+	)
+}
+
 // CloneRepo clones a repository at the given ref.
 func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResult, error) {
-	logger := activity.GetLogger(ctx)
-	logger.Info("Cloning repo", "repo", input.Repo, "ref", input.Ref)
+	log := a.logger(ctx).With("repo", input.Repo, "ref", input.Ref)
+	log.Info("cloning repo")
 
 	dir := fmt.Sprintf("/tmp/ci/%s", input.WorkflowID)
 	_ = os.RemoveAll(dir)
@@ -57,6 +74,7 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 			sc := StepConfig{
 				Name: s.Name, Image: s.Image, Command: s.Command,
 				Timeout: s.Timeout, DependsOn: s.DependsOn,
+				Secrets: s.Secrets,
 			}
 			if s.Resources != nil {
 				sc.Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
@@ -70,8 +88,8 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 
 // RunStep executes a single CI step as a K8s pod or locally.
 func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepResult, error) {
-	logger := activity.GetLogger(ctx)
-	logger.Info("Running step", "name", input.Name, "image", input.Image)
+	log := a.logger(ctx).With("step", input.Name, "image", input.Image)
+	log.Info("running step")
 
 	if a.K8sClient != nil {
 		return a.runStepK8s(ctx, input)
@@ -80,6 +98,9 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 }
 
 func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunStepResult, error) {
+	metrics.PodsActive.Inc()
+	defer metrics.PodsActive.Dec()
+
 	info := activity.GetInfo(ctx)
 	h := sha256.Sum256([]byte(info.WorkflowExecution.ID + info.ActivityID))
 	podName := fmt.Sprintf("ci-%s-%s", input.Name, hex.EncodeToString(h[:6]))
@@ -100,17 +121,50 @@ func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunSte
 		spec.CPU = input.Resources.CPU
 		spec.Memory = input.Resources.Memory
 	}
+	if a.CINodePool {
+		spec.Tolerations = []string{"ci-jobs"}
+		spec.NodeSelector = map[string]string{"workload": "ci-jobs"}
+	}
+
+	// Inject secrets as env vars
+	if len(input.Secrets) > 0 {
+		spec.Env = input.Secrets
+	}
 
 	result, err := k8s.RunPod(ctx, a.K8sClient, spec)
 	if err != nil {
 		return RunStepResult{}, fmt.Errorf("k8s pod: %w", err)
 	}
-	return RunStepResult{ExitCode: result.ExitCode, Output: TruncateOutput(result.Logs, 4000)}, nil
+
+	// Upload full logs to S3 if configured
+	var logURL string
+	if a.S3Client != nil && a.LogBucket != "" {
+		uploadResult, uploadErr := a.UploadLog(ctx, UploadLogInput{
+			WorkflowID: info.WorkflowExecution.ID,
+			StepName:   input.Name,
+			Logs:       result.Logs,
+		})
+		if uploadErr != nil {
+			a.logger(ctx).Warn("failed to upload log", "error", uploadErr)
+		} else {
+			logURL = uploadResult.LogURL
+		}
+	}
+
+	return RunStepResult{
+		ExitCode: result.ExitCode,
+		Output:   TruncateOutput(result.Logs, 4000),
+		LogURL:   logURL,
+	}, nil
 }
 
 func (a *Activities) runStepLocal(ctx context.Context, input RunStepInput) (RunStepResult, error) {
 	cmd := exec.CommandContext(ctx, "sh", "-c", input.Command)
 	cmd.Dir = input.Dir
+	// Inject secrets into local env
+	for k, v := range input.Secrets {
+		cmd.Env = append(cmd.Environ(), fmt.Sprintf("%s=%s", k, v))
+	}
 	out, err := cmd.CombinedOutput()
 	exitCode := 0
 	if err != nil {
@@ -130,14 +184,14 @@ func (a *Activities) Cleanup(ctx context.Context, dir string) error {
 
 // SetCommitStatus sets a commit status on GitHub.
 func (a *Activities) SetCommitStatus(ctx context.Context, input StatusInput) error {
-	if a.GitHubToken == "" {
-		return nil
+	gh, err := a.githubClient(ctx, input.Repo)
+	if err != nil || gh == nil {
+		return err
 	}
 	owner, repo, err := splitRepo(input.Repo)
 	if err != nil {
 		return err
 	}
-	gh := github.NewClient(nil).WithAuthToken(a.GitHubToken)
 	ciContext := "TemporalCI"
 	_, _, err = gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, &github.RepoStatus{
 		State: &input.State, Description: &input.Description, Context: &ciContext,
@@ -145,20 +199,20 @@ func (a *Activities) SetCommitStatus(ctx context.Context, input StatusInput) err
 	return err
 }
 
-// ReportResults reports CI results to GitHub via commit status and PR comment.
+// ReportResults reports CI results to GitHub via Check Runs, commit status, and PR comment.
 func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error {
-	logger := activity.GetLogger(ctx)
-	logger.Info("Reporting results", "repo", input.Repo, "sha", input.HeadSHA, "steps", len(input.Steps))
+	log := a.logger(ctx).With("repo", input.Repo, "sha", input.HeadSHA, "steps", len(input.Steps))
+	log.Info("reporting results")
 
-	if a.GitHubToken == "" {
-		return nil
+	gh, err := a.githubClient(ctx, input.Repo)
+	if err != nil || gh == nil {
+		return err
 	}
 
 	owner, repo, err := splitRepo(input.Repo)
 	if err != nil {
 		return err
 	}
-	gh := github.NewClient(nil).WithAuthToken(a.GitHubToken)
 
 	state := "success"
 	for _, s := range input.Steps {
@@ -166,6 +220,11 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 			state = "failure"
 			break
 		}
+	}
+
+	// Record metrics
+	for _, s := range input.Steps {
+		metrics.StepStatus.WithLabelValues(s.Name, s.Status).Inc()
 	}
 
 	// Build comment body
@@ -189,11 +248,15 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		}
 		totalDuration += s.Duration
 
+		stepLine := fmt.Sprintf("%s **%s**", icon, s.Name)
 		if s.Duration > 0.1 {
-			fmt.Fprintf(&summary, "%s **%s** (%.1fs)\n", icon, s.Name, s.Duration)
-		} else {
-			fmt.Fprintf(&summary, "%s **%s**\n", icon, s.Name)
+			stepLine += fmt.Sprintf(" (%.1fs)", s.Duration)
 		}
+		if s.LogURL != "" {
+			stepLine += fmt.Sprintf(" — [Full log](%s)", s.LogURL)
+		}
+		fmt.Fprintln(&summary, stepLine)
+
 		if s.Output != "" {
 			fmt.Fprintf(&details, "\n<details>\n<summary>📋 <b>%s</b> — exit %d</summary>\n\n```\n%s```\n</details>\n", s.Name, s.ExitCode, s.Output)
 		}
@@ -211,7 +274,7 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		return fmt.Errorf("create commit status: %w", err)
 	}
 
-	// PR comment — find and update existing, or create new
+	// PR comment
 	if input.PRNumber > 0 {
 		var body strings.Builder
 		fmt.Fprintf(&body, "## TemporalCI Results\n\n%s\n", summary.String())
@@ -229,7 +292,7 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		if err := upsertPRComment(ctx, gh, owner, repo, input.PRNumber, comment); err != nil {
 			return fmt.Errorf("PR comment: %w", err)
 		}
-		logger.Info("Updated PR comment", "pr", input.PRNumber)
+		log.Info("updated PR comment", "pr", input.PRNumber)
 	}
 
 	return nil

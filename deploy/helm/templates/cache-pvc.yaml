@@ -1,0 +1,31 @@
+{{- if .Values.cache.goModules.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-go-cache
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.cache.goModules.storageClass | default "efs-sc" }}
+  resources:
+    requests:
+      storage: {{ .Values.cache.goModules.size | default "10Gi" }}
+{{- end }}
+---
+{{- if .Values.cache.artifacts.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-artifacts
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.cache.artifacts.storageClass | default "efs-sc" }}
+  resources:
+    requests:
+      storage: {{ .Values.cache.artifacts.size | default "5Gi" }}
+{{- end }}

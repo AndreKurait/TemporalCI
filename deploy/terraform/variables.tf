@@ -15,3 +15,17 @@ variable "ecr_repo_name" {
   type        = string
   default     = "temporalci"
 }
+
+# --- RDS (provisioned via ACK, but Terraform manages the subnet group) ---
+
+variable "rds_instance_class" {
+  description = "RDS instance class for Temporal DB"
+  type        = string
+  default     = "db.t4g.medium"
+}
+
+variable "rds_subnet_group_name" {
+  description = "DB subnet group name"
+  type        = string
+  default     = ""
+}

@@ -1,0 +1,25 @@
+{{- if .Values.autoMode.enabled }}
+# System NodePool — Temporal server, workers, webhook
+apiVersion: eks.amazonaws.com/v1
+kind: NodePool
+metadata:
+  name: system
+spec:
+  disk:
+    size: 80Gi
+  nodeRepairEnabled: true
+---
+# CI Jobs NodePool — tainted, isolated for CI build/test pods
+apiVersion: eks.amazonaws.com/v1
+kind: NodePool
+metadata:
+  name: ci-jobs
+spec:
+  disk:
+    size: 100Gi
+  nodeRepairEnabled: true
+  taints:
+    - key: workload
+      value: ci-job
+      effect: NoSchedule
+{{- end }}

@@ -23,11 +23,37 @@ spec:
           image: "{{ .Values.image.registry }}{{ if .Values.image.registry }}/{{ end }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: Always
           command: ["/usr/local/bin/worker"]
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
           env:
             - name: TEMPORAL_HOST_PORT
               value: "{{ .Release.Name }}-frontend:7233"
             - name: TEMPORAL_WEB_URL
               value: "{{ .Values.worker.temporalWebURL | default "" }}"
+            {{- if .Values.logs.s3Bucket }}
+            - name: LOG_BUCKET
+              value: "{{ .Values.logs.s3Bucket }}"
+            {{- end }}
+            {{- if .Values.logs.awsRegion }}
+            - name: AWS_REGION
+              value: "{{ .Values.logs.awsRegion }}"
+            {{- end }}
+            {{- if .Values.ciNodePool.enabled }}
+            - name: CI_NODE_POOL
+              value: "true"
+            {{- end }}
+            {{- if .Values.secrets.prefix }}
+            - name: SECRETS_PREFIX
+              value: "{{ .Values.secrets.prefix }}"
+            {{- end }}
+            {{- if .Values.githubApp.enabled }}
+            - name: GITHUB_APP_ID
+              value: "{{ .Values.githubApp.appID }}"
+            - name: GITHUB_APP_PRIVATE_KEY_PATH
+              value: "/etc/temporalci/github-app-key.pem"
+            {{- end }}
             {{- if .Values.secrets.local.enabled }}
             - name: GITHUB_TOKEN
               valueFrom:
@@ -35,5 +61,18 @@ spec:
                   name: {{ .Release.Name }}-secrets
                   key: github-token
             {{- end }}
+          {{- if .Values.githubApp.enabled }}
+          volumeMounts:
+            - name: github-app-key
+              mountPath: /etc/temporalci/github-app-key.pem
+              subPath: github-app-key.pem
+              readOnly: true
+          {{- end }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- if .Values.githubApp.enabled }}
+      volumes:
+        - name: github-app-key
+          secret:
+            secretName: {{ .Release.Name }}-github-app
+      {{- end }}

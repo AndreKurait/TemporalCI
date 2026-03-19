@@ -21,6 +21,7 @@ type StepConfig struct {
 	Timeout   string          `json:"timeout,omitempty"`
 	DependsOn []string        `json:"dependsOn,omitempty"`
 	Resources *ResourceConfig `json:"resources,omitempty"`
+	Secrets   []string        `json:"secrets,omitempty"` // Secret names to fetch and inject
 }
 
 // ResourceConfig defines resource limits for a CI step pod.
@@ -31,19 +32,21 @@ type ResourceConfig struct {
 
 // RunStepInput defines the input for the RunStep activity.
 type RunStepInput struct {
-	Dir       string          `json:"dir"`
-	Command   string          `json:"command"`
-	Name      string          `json:"name"`
-	Image     string          `json:"image"`
-	Resources *ResourceConfig `json:"resources,omitempty"`
-	Repo      string          `json:"repo,omitempty"`
-	Ref       string          `json:"ref,omitempty"`
+	Dir       string            `json:"dir"`
+	Command   string            `json:"command"`
+	Name      string            `json:"name"`
+	Image     string            `json:"image"`
+	Resources *ResourceConfig   `json:"resources,omitempty"`
+	Repo      string            `json:"repo,omitempty"`
+	Ref       string            `json:"ref,omitempty"`
+	Secrets   map[string]string `json:"secrets,omitempty"` // Resolved secret key-value pairs
 }
 
 // RunStepResult defines the output of the RunStep activity.
 type RunStepResult struct {
 	ExitCode int    `json:"exitCode"`
 	Output   string `json:"output"`
+	LogURL   string `json:"logURL,omitempty"`
 }
 
 // StepResult captures the result of a single CI step (used in reporting).
@@ -53,6 +56,7 @@ type StepResult struct {
 	Output   string  `json:"output"`
 	ExitCode int     `json:"exitCode"`
 	Duration float64 `json:"duration"`
+	LogURL   string  `json:"logURL,omitempty"`
 }
 
 // ReportInput defines the input for the ReportResults activity.

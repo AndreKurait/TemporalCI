@@ -25,3 +25,29 @@ roleRef:
   kind: Role
   name: {{ .Release.Name }}-ci-pod-manager
   apiGroup: rbac.authorization.k8s.io
+---
+# CI job pods get a minimal role — no K8s API access at all
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-ci-job-minimal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+rules: []  # No permissions — CI jobs don't need K8s API access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-ci-job-minimal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: temporalci-ci-job
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-ci-job-minimal
+  apiGroup: rbac.authorization.k8s.io

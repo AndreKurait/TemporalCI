@@ -183,6 +183,61 @@ resource "aws_iam_role" "webhook" {
   })
 }
 
+# --- ACK Capability Role (provisions RDS, S3 as K8s CRDs) ---
+
+resource "aws_iam_role" "ack" {
+  name = "${var.cluster_name}-ack"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "pods.eks.amazonaws.com" }
+      Action    = ["sts:AssumeRole", "sts:TagSession"]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ack" {
+  name = "ack-resources"
+  role = aws_iam_role.ack.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:CreateDBInstance", "rds:DeleteDBInstance", "rds:DescribeDBInstances",
+          "rds:ModifyDBInstance", "rds:CreateDBSubnetGroup", "rds:DeleteDBSubnetGroup",
+          "rds:DescribeDBSubnetGroups", "rds:AddTagsToResource", "rds:ListTagsForResource",
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:CreateBucket", "s3:DeleteBucket", "s3:PutBucketTagging",
+          "s3:GetBucketTagging", "s3:PutBucketLifecycleConfiguration",
+          "s3:PutBucketEncryption", "s3:PutBucketPublicAccessBlock",
+        ]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+# --- RDS Subnet Group (needed by ACK DBInstance) ---
+
+resource "aws_db_subnet_group" "temporal" {
+  name       = "${var.cluster_name}-temporal"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name = "${var.cluster_name}-temporal-db"
+  }
+}
+
 # --- Pod Identity Associations ---
 
 resource "aws_eks_pod_identity_association" "worker" {

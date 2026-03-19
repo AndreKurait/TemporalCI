@@ -1,0 +1,37 @@
+{{- if .Values.ack.rds.enabled }}
+apiVersion: rds.services.k8s.aws/v1alpha1
+kind: DBInstance
+metadata:
+  name: {{ .Release.Name }}-db
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+spec:
+  engine: postgres
+  engineVersion: "16"
+  dbInstanceClass: {{ .Values.ack.rds.instanceClass }}
+  dbInstanceIdentifier: {{ .Release.Name }}-temporal
+  allocatedStorage: {{ .Values.ack.rds.allocatedStorage }}
+  masterUsername: temporal
+  masterUserPassword:
+    namespace: {{ .Release.Namespace }}
+    name: {{ .Release.Name }}-db-password
+    key: password
+  dbSubnetGroupName: {{ .Values.ack.rds.subnetGroupName }}
+  publiclyAccessible: false
+  storageEncrypted: true
+  multiAZ: {{ .Values.ack.rds.multiAZ }}
+  tags:
+    - key: app
+      value: temporalci
+---
+# ACK writes connection details back as this Secret automatically
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-db-password
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+type: Opaque
+data:
+  password: {{ .Values.ack.rds.masterPassword | b64enc | quote }}
+{{- end }}

@@ -22,11 +22,16 @@ type PodSpec struct {
 	WorkingDir  string
 	Env         map[string]string
 	Tolerations []string
+	NodeSelector map[string]string
 	CPU         string
 	Memory      string
 	// Clone config: if set, an init container clones the repo
 	CloneURL string
 	CloneRef string
+	// Cache config
+	CachePVC string // PVC name for Go module cache (empty = ephemeral emptyDir)
+	// Artifact config
+	ArtifactPVC string // PVC name for artifact sharing between steps
 }
 
 // PodResult captures the outcome of a pod execution.
@@ -109,8 +114,9 @@ func buildPod(spec PodSpec) *corev1.Pod {
 			Labels:    map[string]string{"app": "temporalci-ci-job"},
 		},
 		Spec: corev1.PodSpec{
-			Containers:    []corev1.Container{container},
-			RestartPolicy: corev1.RestartPolicyNever,
+			Containers:     []corev1.Container{container},
+			RestartPolicy:  corev1.RestartPolicyNever,
+			ServiceAccountName: "temporalci-ci-job",
 		},
 	}
 
@@ -136,26 +142,58 @@ func buildPod(spec PodSpec) *corev1.Pod {
 		}}
 	}
 
-	// Go module cache volume
-	cacheVol := corev1.Volume{
-		Name: "go-cache",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
+	// Go module cache — PVC-backed if configured, otherwise emptyDir
+	if spec.CachePVC != "" {
+		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+			Name: "go-cache",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: spec.CachePVC,
+				},
+			},
+		})
+	} else {
+		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+			Name: "go-cache",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
 	}
-	pod.Spec.Volumes = append(pod.Spec.Volumes, cacheVol)
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts,
 		corev1.VolumeMount{Name: "go-cache", MountPath: "/go/pkg/mod"},
 	)
 
+	// Artifact volume — PVC-backed if configured
+	if spec.ArtifactPVC != "" {
+		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+			Name: "artifacts",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: spec.ArtifactPVC,
+				},
+			},
+		})
+		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{Name: "artifacts", MountPath: "/artifacts"},
+		)
+	}
+
+	// Tolerations
 	for _, t := range spec.Tolerations {
 		if t == "ci-jobs" {
 			pod.Spec.Tolerations = append(pod.Spec.Tolerations, corev1.Toleration{
-				Key:      "ci-jobs",
-				Operator: corev1.TolerationOpExists,
+				Key:      "workload",
+				Value:    "ci-job",
+				Operator: corev1.TolerationOpEqual,
 				Effect:   corev1.TaintEffectNoSchedule,
 			})
 		}
+	}
+
+	// Node selector
+	if len(spec.NodeSelector) > 0 {
+		pod.Spec.NodeSelector = spec.NodeSelector
 	}
 
 	return pod

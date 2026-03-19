@@ -63,3 +63,45 @@ serviceAccounts:
     roleArn: ""
   ciJob:
     roleArn: ""
+
+# --- Q1 ---
+logs:
+  s3Bucket: ""
+  awsRegion: ""
+
+ciNodePool:
+  enabled: false
+
+cache:
+  goModules:
+    enabled: false
+    storageClass: "efs-sc"
+    size: "10Gi"
+  artifacts:
+    enabled: false
+    storageClass: "efs-sc"
+    size: "5Gi"
+
+# --- Q2 ---
+githubApp:
+  enabled: false
+  appID: ""
+
+# --- Q3 ---
+autoMode:
+  enabled: false  # Enable to create NodePool CRDs for Auto Mode
+
+ack:
+  rds:
+    enabled: false
+    instanceClass: "db.t4g.medium"
+    allocatedStorage: 20
+    subnetGroupName: ""
+    multiAZ: false
+    masterPassword: ""  # Set via --set
+  s3:
+    enabled: false
+    bucketName: ""
+
+networkPolicy:
+  enabled: false
