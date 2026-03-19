@@ -18,6 +18,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  id-token: write  # Required for OIDC federation with AWS
+
 jobs:
   terraform:
     runs-on: ubuntu-latest
@@ -25,16 +28,15 @@ jobs:
       run:
         working-directory: deploy/terraform
     env:
-      TF_VAR_region: ${{ secrets.AWS_REGION }}
+      TF_VAR_region: ${{ vars.AWS_REGION }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
