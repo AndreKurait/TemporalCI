@@ -54,6 +54,14 @@ spec:
             - name: GITHUB_APP_PRIVATE_KEY_PATH
               value: "/etc/temporalci/github-app-key.pem"
             {{- end }}
+            {{- if .Values.aws.endpointURL }}
+            - name: AWS_ENDPOINT_URL
+              value: "{{ .Values.aws.endpointURL }}"
+            - name: AWS_ACCESS_KEY_ID
+              value: "{{ .Values.aws.accessKeyID }}"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "{{ .Values.aws.secretAccessKey }}"
+            {{- end }}
             {{- if .Values.secrets.local.enabled }}
             - name: GITHUB_TOKEN
               valueFrom:

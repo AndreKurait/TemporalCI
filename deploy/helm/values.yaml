@@ -105,3 +105,12 @@ ack:
 
 networkPolicy:
   enabled: false
+
+# --- Local dev (LocalStack) ---
+localstack:
+  enabled: false
+
+aws:
+  endpointURL: ""
+  accessKeyID: ""
+  secretAccessKey: ""
