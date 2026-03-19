@@ -92,6 +92,22 @@ export default defineConfig({
           tag: 'meta',
           attrs: { name: 'twitter:card', content: 'summary_large_image' },
         },
+        {
+          tag: 'script',
+          attrs: { type: 'application/ld+json' },
+          content: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'SoftwareApplication',
+            name: 'TemporalCI',
+            description: 'Kubernetes-native CI system built on Temporal for durable, observable, replayable pipelines.',
+            url: 'https://andrekurait.github.io/TemporalCI/',
+            applicationCategory: 'DeveloperApplication',
+            operatingSystem: 'Kubernetes',
+            license: 'https://github.com/AndreKurait/TemporalCI/blob/main/LICENSE',
+            codeRepository: 'https://github.com/AndreKurait/TemporalCI',
+            programmingLanguage: 'Go',
+          }),
+        },
       ],
       editLink: {
         baseUrl: 'https://github.com/AndreKurait/TemporalCI/edit/main/site/',
