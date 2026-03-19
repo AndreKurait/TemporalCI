@@ -1,6 +1,6 @@
 image:
   registry: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
-  tag: 150b4df6a503bc2b73dbdba9581001c8fef55158
+  tag: 77e60f790d6824416777699359bd91b3d91a8993
   pullPolicy: Always
 
 worker:
