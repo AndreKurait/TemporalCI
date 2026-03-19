@@ -41,7 +41,17 @@ type StepConfig struct {
 	Timeout   string          `yaml:"timeout,omitempty"`
 	DependsOn []string        `yaml:"depends_on,omitempty"`
 	Resources *ResourceConfig `yaml:"resources,omitempty"`
-	Secrets   []string        `yaml:"secrets,omitempty"` // Secret names to inject as env vars
+	Secrets   []string        `yaml:"secrets,omitempty"`
+	HelmTest  *HelmTestConfig `yaml:"helm_test,omitempty"`
+}
+
+// HelmTestConfig defines a helm test step that runs on an ephemeral cluster.
+type HelmTestConfig struct {
+	ChartPath   string            `yaml:"chart_path"`
+	ReleaseName string            `yaml:"release_name,omitempty"`
+	Namespace   string            `yaml:"namespace,omitempty"`
+	Values      map[string]string `yaml:"values,omitempty"`
+	Timeout     string            `yaml:"timeout,omitempty"`
 }
 
 // ResourceConfig defines resource limits for a step.

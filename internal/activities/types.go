@@ -21,7 +21,17 @@ type StepConfig struct {
 	Timeout   string          `json:"timeout,omitempty"`
 	DependsOn []string        `json:"dependsOn,omitempty"`
 	Resources *ResourceConfig `json:"resources,omitempty"`
-	Secrets   []string        `json:"secrets,omitempty"` // Secret names to fetch and inject
+	Secrets   []string        `json:"secrets,omitempty"`
+	HelmTest  *HelmTestConfig `json:"helmTest,omitempty"`
+}
+
+// HelmTestConfig defines a helm test step.
+type HelmTestConfig struct {
+	ChartPath   string            `json:"chartPath"`
+	ReleaseName string            `json:"releaseName,omitempty"`
+	Namespace   string            `json:"namespace,omitempty"`
+	Values      map[string]string `json:"values,omitempty"`
+	Timeout     string            `json:"timeout,omitempty"`
 }
 
 // ResourceConfig defines resource limits for a CI step pod.
