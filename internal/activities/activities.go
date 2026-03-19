@@ -424,8 +424,9 @@ func convertStepConfig(s config.StepConfig) StepConfig {
 		Commands: s.Commands, Timeout: s.Timeout, DependsOn: s.DependsOn,
 		Secrets: s.Secrets, When: s.GetCondition(), Type: s.Type,
 		Docker: s.Docker, Privileged: s.Privileged,
-		Lock: s.Lock, AllowSkip: s.AllowSkip, LockTimeout: s.LockTimeout,
+		DynamicMatrix: s.DynamicMatrix, Lock: s.Lock, AllowSkip: s.AllowSkip, LockTimeout: s.LockTimeout,
 	}
+	sc.Post = s.Post
 	if s.Resources != nil {
 		sc.Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
 	}

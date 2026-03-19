@@ -36,12 +36,14 @@ type StepConfig struct {
 	Docker     bool            `json:"docker,omitempty"`
 	Privileged bool            `json:"privileged,omitempty"`
 	Artifacts  *ArtifactConfig `json:"artifacts,omitempty"`
+	DynamicMatrix string       `json:"dynamicMatrix,omitempty"`
 	Lock       string          `json:"lock,omitempty"`
 	LockPool   *LockPoolRef    `json:"lockPool,omitempty"`
 	LockTimeout string         `json:"lockTimeout,omitempty"`
 	AWSRole    *AWSRoleConfig  `json:"awsRole,omitempty"`
 	Trigger    *TriggerStep    `json:"trigger,omitempty"`
 	AllowSkip  bool            `json:"allowSkip,omitempty"`
+	Post       []string          `json:"post,omitempty"`
 	Outputs    map[string]string `json:"outputs,omitempty"`
 }
 
