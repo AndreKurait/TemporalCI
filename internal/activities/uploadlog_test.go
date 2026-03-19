@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -26,8 +27,8 @@ type mockPresigner struct {
 	url string
 }
 
-func (m *mockPresigner) PresignGetObject(_ context.Context, _ *s3.GetObjectInput, _ ...func(*s3.PresignOptions)) (*s3.PresignHTTPRequest, error) {
-	return &s3.PresignHTTPRequest{URL: m.url}, nil
+func (m *mockPresigner) PresignGetObject(_ context.Context, _ *s3.GetObjectInput, _ ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error) {
+	return &v4.PresignedHTTPRequest{URL: m.url}, nil
 }
 
 func TestUploadLog_NoS3(t *testing.T) {
