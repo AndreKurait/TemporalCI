@@ -13,7 +13,7 @@ parameters:
 
 steps:
   - name: test
-    image: golang:1.26
+    image: golang:1.24
     command: go test -race -coverprofile=coverage.out ./...
     timeout: 10m
     artifacts:
@@ -21,7 +21,7 @@ steps:
         - path: coverage.out
 
   - name: build
-    image: golang:1.26
+    image: golang:1.24
     depends_on: [test]
     commands:
       - CGO_ENABLED=0 go build -o /artifacts/webhook ./cmd/webhook
