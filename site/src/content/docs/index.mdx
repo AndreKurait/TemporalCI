@@ -15,19 +15,19 @@ hero:
 
 {/* ── Navigation ── */}
 <nav class="landing-nav" aria-label="Main navigation">
-  <a href="/TemporalCI/" class="landing-nav-logo">⚡ TemporalCI</a>
+  <a href="/TemporalCI/" class="landing-nav-logo"><i class="fa-solid fa-bolt"></i> TemporalCI</a>
   <div class="landing-nav-links">
     <a href="/TemporalCI/getting-started/quickstart/">Docs</a>
     <a href="/TemporalCI/architecture/overview/">Architecture</a>
     <a href="/TemporalCI/roadmap/">Roadmap</a>
     <a href="/TemporalCI/blog/">Blog</a>
-    <a href="https://github.com/AndreKurait/TemporalCI" class="gh-link">GitHub ↗</a>
+    <a href="https://github.com/AndreKurait/TemporalCI" class="gh-link"><i class="fa-brands fa-github"></i> GitHub</a>
   </div>
 </nav>
 
 {/* ── Hero ── */}
 <section class="hero-section" id="main-content">
-  <div class="hero-badge">🚀 Open source — <a href="https://github.com/AndreKurait/TemporalCI">Star on GitHub</a></div>
+  <div class="hero-badge"><i class="fa-solid fa-rocket"></i> Open source — <a href="https://github.com/AndreKurait/TemporalCI">Star on GitHub</a></div>
 
   <h1 class="hero-title" set:html="CI pipelines that<br /><span class='accent'>never lose your work.</span>" />
 
@@ -158,27 +158,27 @@ hero:
 
   <div class="flow-steps">
     <div class="flow-step">
-      <div class="flow-icon">📝</div>
+      <div class="flow-icon"><i class="fa-solid fa-code-commit"></i></div>
       <h4>git push</h4>
       <div class="flow-desc">Push code or open a PR</div>
     </div>
     <div class="flow-step">
-      <div class="flow-icon">🔔</div>
+      <div class="flow-icon"><i class="fa-solid fa-bell"></i></div>
       <h4>Webhook</h4>
       <div class="flow-desc">GitHub sends event, signature validated</div>
     </div>
     <div class="flow-step">
-      <div class="flow-icon">⚡</div>
+      <div class="flow-icon"><i class="fa-solid fa-bolt"></i></div>
       <h4>Temporal Workflow</h4>
       <div class="flow-desc">Durable orchestration with retry &amp; state</div>
     </div>
     <div class="flow-step">
-      <div class="flow-icon">🐳</div>
+      <div class="flow-icon"><i class="fa-brands fa-docker"></i></div>
       <h4>K8s Pods</h4>
       <div class="flow-desc">Each step in an isolated container</div>
     </div>
     <div class="flow-step">
-      <div class="flow-icon">✅</div>
+      <div class="flow-icon"><i class="fa-solid fa-circle-check"></i></div>
       <h4>PR Results</h4>
       <div class="flow-desc">Status, comments, logs on your PR</div>
     </div>
@@ -215,47 +215,47 @@ hero:
 
   <div class="feature-grid">
     <div class="feature-card">
-      <div class="feature-icon">⚡</div>
+      <div class="feature-icon"><i class="fa-solid fa-bolt"></i></div>
       <h3>Durable Workflows</h3>
       <div class="feature-text">Powered by Temporal. Your pipeline state survives crashes, restarts, and node evictions. Resume from the last completed step, not from scratch.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🐳</div>
+      <div class="feature-icon"><i class="fa-brands fa-docker"></i></div>
       <h3>K8s-Native Execution</h3>
       <div class="feature-text">Each CI step runs in its own pod with resource limits and node pool isolation. No shared runners. No noisy neighbors.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🔄</div>
+      <div class="feature-icon"><i class="fa-solid fa-rotate"></i></div>
       <h3>Automatic Retries</h3>
       <div class="feature-text">Per-step retry policies with exponential backoff. Clone fails? Retried 3x. Flaky network? Handled. You configure the policy, Temporal enforces it.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">📊</div>
+      <div class="feature-icon"><i class="fa-solid fa-chart-column"></i></div>
       <h3>PR-Native Results</h3>
       <div class="feature-text">Commit status, PR comments with per-step timing, collapsible logs, and direct links to the Temporal Web UI. Results where you already work.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🔐</div>
+      <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
       <h3>Secure by Default</h3>
       <div class="feature-text">CI pods get zero K8s API access. Network policies block cluster-internal traffic. OIDC federation — no stored credentials.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">📦</div>
+      <div class="feature-icon"><i class="fa-solid fa-cube"></i></div>
       <h3>One Helm Chart</h3>
       <div class="feature-text">Same chart runs on minikube and EKS Auto Mode. Different values, same architecture. Local dev in minutes, production via GitOps.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🔀</div>
+      <div class="feature-icon"><i class="fa-solid fa-code-branch"></i></div>
       <h3>DAG Execution</h3>
       <div class="feature-text">Steps declare dependencies. Independent steps run in parallel. Failed dependencies skip downstream steps automatically.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🔍</div>
+      <div class="feature-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
       <h3>Full Observability</h3>
       <div class="feature-text">Every workflow execution is inspectable and replayable in the Temporal Web UI. See exact inputs, outputs, and timing for every activity.</div>
     </div>
     <div class="feature-card">
-      <div class="feature-icon">🚫</div>
+      <div class="feature-icon"><i class="fa-solid fa-ban"></i></div>
       <h3>Cancel &amp; Replace</h3>
       <div class="feature-text">New push on the same branch? Previous workflow is cancelled, cleanup runs, and GitHub shows "cancelled" — not "pending forever."</div>
     </div>
@@ -384,7 +384,7 @@ hero:
   <div class="footer-cta-sub">TemporalCI is open source and free to run on your own cluster.</div>
   <div class="hero-actions">
     <a href="/TemporalCI/getting-started/quickstart/" class="btn-primary">Get Started →</a>
-    <a href="https://github.com/AndreKurait/TemporalCI" class="btn-secondary">⭐ Star on GitHub</a>
+    <a href="https://github.com/AndreKurait/TemporalCI" class="btn-secondary"><i class="fa-regular fa-star"></i> Star on GitHub</a>
   </div>
   <div class="footer-links">
     <a href="/TemporalCI/getting-started/quickstart/">Documentation</a>
