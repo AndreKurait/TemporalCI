@@ -140,7 +140,7 @@ logs:
   awsRegion: "us-east-1"
 
 ciNodePool:
-  enabled: true
+  enabled: false
 
 cache:
   goModules:
