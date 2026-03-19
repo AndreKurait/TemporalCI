@@ -114,12 +114,14 @@ type StepConfig struct {
 	Docker     bool            `yaml:"docker,omitempty"`
 	Privileged bool            `yaml:"privileged,omitempty"`
 	Artifacts  *ArtifactConfig `yaml:"artifacts,omitempty"`
+	DynamicMatrix string       `yaml:"dynamic_matrix,omitempty"`
 	Lock       string          `yaml:"lock,omitempty"`
 	LockPool   *LockPoolRef    `yaml:"lock_pool,omitempty"`
 	LockTimeout string         `yaml:"lock_timeout,omitempty"`
 	AWSRole    *AWSRoleConfig  `yaml:"aws_role,omitempty"`
 	Trigger    *TriggerStep    `yaml:"trigger,omitempty"`
 	AllowSkip  bool            `yaml:"allow-skip,omitempty"`
+	Post       []string        `yaml:"post,omitempty"`
 }
 
 // ServiceConfig defines a sidecar service container.
@@ -409,12 +411,22 @@ func triggerMatches(tc *TriggerConfig, event, ref string) bool {
 		}
 	case "pull_request":
 		if tc.PullRequest != nil {
-			return matchBranch(tc.PullRequest.Branches, ref)
+			branchOK := matchBranch(tc.PullRequest.Branches, ref)
+			if len(tc.PullRequest.Labels) > 0 {
+				return branchOK // label filtering is done at webhook level via CIPipelineInput.Labels
+			}
+			return branchOK
+		}
+	case "tag":
+		if tc.Push != nil {
+			return matchTag(tc.Push.Tags, ref)
 		}
 	case "release":
 		return tc.Release != nil
 	case "schedule":
 		return len(tc.Schedule) > 0
+	case "issues":
+		return tc.Issues != nil
 	}
 	return false
 }
