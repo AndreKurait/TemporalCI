@@ -516,22 +516,19 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   line-height: 1.5;
 }
 
-/* Architecture diagram */
-.arch-diagram {
+/* Architecture diagram — Mermaid rendered */
+.arch-section {
+  margin-top: 3rem;
+}
+
+.arch-section pre.mermaid {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 0.75rem;
   padding: 2rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
-  line-height: 1.6;
+  text-align: center;
   overflow-x: auto;
-  white-space: pre;
-  color: var(--text-secondary);
 }
-
-.arch-diagram .highlight { color: var(--accent); }
-.arch-diagram .label { color: var(--text-muted); }
 
 /* Quickstart section */
 .quickstart-steps {
@@ -735,13 +732,6 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 .val-purple { color: #a78bfa; }
 .val-yellow { color: #fbbf24; }
 .val-green { color: #34d399; }
-
-.arch-section {
-  margin-top: 3rem;
-}
-
-.arch-diagram .hl { color: var(--accent); }
-.arch-diagram .lb { color: var(--text-muted); }
 
 .qs-config-block {
   display: block;

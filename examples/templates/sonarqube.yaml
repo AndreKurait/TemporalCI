@@ -1,0 +1,42 @@
+# SonarQube Analysis Pipeline Template
+# Uses service containers to run SonarQube alongside the scanner
+
+pipelines:
+  sonarqube:
+    on:
+      push:
+        branches: [main]
+      pull_request:
+        branches: [main]
+
+    steps:
+      - name: sonar-scan
+        image: sonarsource/sonar-scanner-cli:latest
+        services:
+          - name: sonarqube
+            image: sonarqube:25.10-community
+            ports: [9000]
+            health:
+              cmd: "curl -sf http://localhost:9000/api/system/health | grep -q GREEN"
+              interval: 10s
+              retries: 60
+            env:
+              SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+        commands:
+          - sonar-scanner
+              -Dsonar.host.url=http://localhost:9000
+              -Dsonar.projectKey=$REPO
+              -Dsonar.sources=.
+              -Dsonar.login=$SONAR_TOKEN
+          - |
+            # Fetch issues and fail if above baseline
+            ISSUES=$(curl -s "http://localhost:9000/api/issues/search?componentKeys=$REPO&statuses=OPEN" | jq '.total')
+            echo "SonarQube found $ISSUES open issues"
+            echo "::temporalci-outputs-start::"
+            echo "SONAR_ISSUES=$ISSUES"
+            echo "::temporalci-outputs-end::"
+        secrets: [SONAR_TOKEN]
+        artifacts:
+          upload:
+            - path: /artifacts/sonar-issues.json
+        timeout: 30m

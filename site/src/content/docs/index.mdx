@@ -185,24 +185,40 @@ hero:
   </div>
 
   <div class="arch-section">
-    <div class="arch-diagram"><span class="hl">┌──────────────────────────────────────────────────────────┐</span>
-<span class="hl">│</span>                 EKS Auto Mode Cluster                    <span class="hl">│</span>
-<span class="hl">│</span>                                                          <span class="hl">│</span>
-<span class="hl">│</span>  ┌──────────────┐    ┌────────────────────────┐           <span class="hl">│</span>
-<span class="hl">│</span>  │   <span class="lb">Temporal</span>    │    │   <span class="lb">TemporalCI Workers</span>   │           <span class="hl">│</span>
-<span class="hl">│</span>  │   <span class="lb">Server</span>      │◄──►│  <span class="lb">(Go, Temporal SDK)</span>    │           <span class="hl">│</span>
-<span class="hl">│</span>  └──────┬───────┘    └────────┬───────────────┘           <span class="hl">│</span>
-<span class="hl">│</span>         │                     │                           <span class="hl">│</span>
-<span class="hl">│</span>         ▼                     ▼                           <span class="hl">│</span>
-<span class="hl">│</span>  ┌──────────────┐    ┌────────────────────┐               <span class="hl">│</span>
-<span class="hl">│</span>  │  <span class="lb">RDS Postgres</span> │    │  <span class="lb">CI Job Pods</span>       │               <span class="hl">│</span>
-<span class="hl">│</span>  │  <span class="lb">(via ACK)</span>    │    │  <span class="lb">[ci-jobs NodePool]</span> │               <span class="hl">│</span>
-<span class="hl">│</span>  └──────────────┘    └────────────────────┘               <span class="hl">│</span>
-<span class="hl">│</span>                                                          <span class="hl">│</span>
-<span class="hl">│</span>  <span class="lb">EKS Capabilities:</span> Argo CD · ACK                         <span class="hl">│</span>
-<span class="hl">│</span>  <span class="lb">EKS Add-ons:</span> Secrets Store CSI · CloudWatch              <span class="hl">│</span>
-<span class="hl">│</span>  <span class="lb">Auto Mode:</span> Compute · VPC CNI · CoreDNS · EBS CSI         <span class="hl">│</span>
-<span class="hl">└──────────────────────────────────────────────────────────┘</span></div>
+    <pre class="mermaid">
+{`graph TB
+    subgraph EKS["EKS Auto Mode Cluster"]
+        direction TB
+        TS["Temporal Server"]
+        TW["TemporalCI Workers<br/>(Go, Temporal SDK)"]
+        TS <-->|"gRPC"| TW
+
+        DB["RDS PostgreSQL<br/>(via ACK)"]
+        PODS["CI Job Pods<br/>[ci-jobs NodePool]"]
+
+        TS --> DB
+        TW --> PODS
+
+        subgraph Managed["AWS Managed Services"]
+            CAP["EKS Capabilities: Argo CD · ACK"]
+            ADD["EKS Add-ons: Secrets Store CSI · CloudWatch"]
+            AUTO["Auto Mode: Compute · VPC CNI · CoreDNS · EBS CSI"]
+        end
+    end
+
+    GH["GitHub Webhook"] -->|"push/PR event"| TW
+
+    style EKS fill:transparent,stroke:#6d5bf7,stroke-width:2px,color:#fff
+    style Managed fill:transparent,stroke:#545861,stroke-width:1px,stroke-dasharray:5 5
+    style TS fill:#1a1a4e,stroke:#6d5bf7,color:#fff
+    style TW fill:#1a1a4e,stroke:#6d5bf7,color:#fff
+    style DB fill:#141414,stroke:#545861,color:#a1a1a1
+    style PODS fill:#141414,stroke:#545861,color:#a1a1a1
+    style GH fill:#141414,stroke:#545861,color:#a1a1a1
+    style CAP fill:transparent,stroke:none,color:#888b96
+    style ADD fill:transparent,stroke:none,color:#888b96
+    style AUTO fill:transparent,stroke:none,color:#888b96`}
+    </pre>
   </div>
 </section>
 
@@ -396,8 +412,14 @@ hero:
   </div>
 </section>
 
-{/* ── Scroll animation ── */}
+{/* ── Mermaid init + Scroll animation ── */}
 <script is:inline>{`
+  // Mermaid: init with theme matching Starlight
+  if (window.mermaid) {
+    const isDark = document.documentElement.dataset.theme !== 'light';
+    mermaid.initialize({ startOnLoad: true, theme: isDark ? 'dark' : 'default' });
+  }
+  // Scroll fade-in
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });

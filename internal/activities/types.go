@@ -38,6 +38,7 @@ type StepConfig struct {
 	Artifacts  *ArtifactConfig `json:"artifacts,omitempty"`
 	Lock       string          `json:"lock,omitempty"`
 	LockPool   *LockPoolRef    `json:"lockPool,omitempty"`
+	LockTimeout string         `json:"lockTimeout,omitempty"`
 	AWSRole    *AWSRoleConfig  `json:"awsRole,omitempty"`
 	Trigger    *TriggerStep    `json:"trigger,omitempty"`
 	AllowSkip  bool            `json:"allowSkip,omitempty"`

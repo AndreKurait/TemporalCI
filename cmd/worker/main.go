@@ -52,6 +52,7 @@ func main() {
 	w := worker.New(c, taskQueue, worker.Options{})
 	w.RegisterWorkflow(workflows.CIPipeline)
 	w.RegisterWorkflow(workflows.MatrixChild)
+	w.RegisterWorkflow(workflows.LockManager)
 	w.RegisterWorkflow(workflows.PodCleanup)
 	w.RegisterWorkflow(workflows.ApprovalGate)
 	w.RegisterWorkflow(workflows.ClusterPool)
@@ -103,6 +104,7 @@ func main() {
 		if cfg.LogBucket != "" {
 			s3Client := s3.NewFromConfig(awsCfg)
 			acts.S3Client = s3Client
+			acts.S3Full = s3Client
 			acts.S3Presigner = s3.NewPresignClient(s3Client)
 			slog.Info("S3 client initialized", "bucket", cfg.LogBucket)
 		}
@@ -117,6 +119,7 @@ func main() {
 	w.RegisterActivity(acts)
 
 	go scheduleCleanup(c)
+	go startLockManager(c)
 
 	slog.Info("starting worker", "taskQueue", taskQueue)
 	if err := w.Run(worker.InterruptCh()); err != nil {
@@ -140,4 +143,18 @@ func scheduleCleanup(c client.Client) {
 		return
 	}
 	slog.Info("pod cleanup schedule created", "id", handle.GetID())
+}
+
+func startLockManager(c client.Client) {
+	time.Sleep(5 * time.Second)
+	opts := client.StartWorkflowOptions{
+		ID:        "lock-manager",
+		TaskQueue: taskQueue,
+	}
+	_, err := c.ExecuteWorkflow(context.Background(), opts, workflows.LockManager)
+	if err != nil {
+		slog.Info("lock manager start result", "error", err)
+	} else {
+		slog.Info("lock manager started")
+	}
 }

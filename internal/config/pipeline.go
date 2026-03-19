@@ -107,6 +107,7 @@ type StepConfig struct {
 	Secrets    []string        `yaml:"secrets,omitempty"`
 	HelmTest   *HelmTestConfig `yaml:"helm_test,omitempty"`
 	When       string          `yaml:"when,omitempty"`
+	If         string          `yaml:"if,omitempty"` // alias for When
 	Type       string          `yaml:"type,omitempty"` // "", "gate"
 	Matrix     *MatrixConfig   `yaml:"matrix,omitempty"`
 	Services   []ServiceConfig `yaml:"services,omitempty"`
@@ -451,4 +452,12 @@ func (s *StepConfig) GetCommand() string {
 		return strings.Join(s.Commands, " && ")
 	}
 	return ""
+}
+
+// GetCondition returns the effective conditional expression (When or If).
+func (s *StepConfig) GetCondition() string {
+	if s.When != "" {
+		return s.When
+	}
+	return s.If
 }

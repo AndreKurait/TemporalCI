@@ -29,6 +29,7 @@ type Activities struct {
 	TemporalWebURL string
 	Namespace      string
 	S3Client       S3Uploader
+	S3Full         S3FullClient // extended S3 client for artifact list/get
 	S3Presigner    S3Presigner
 	LogBucket      string
 	CINodePool     bool
@@ -210,7 +211,7 @@ func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunSte
 
 	return RunStepResult{
 		ExitCode: result.ExitCode,
-		Output:   TruncateOutput(result.Logs, 4000),
+		Output:   MaskSecrets(TruncateOutput(result.Logs, 4000), input.Secrets),
 		LogURL:   logURL,
 		Outputs:  result.Outputs,
 	}, nil
@@ -421,9 +422,9 @@ func convertStepConfig(s config.StepConfig) StepConfig {
 	sc := StepConfig{
 		Name: s.Name, Image: s.Image, Command: s.GetCommand(),
 		Commands: s.Commands, Timeout: s.Timeout, DependsOn: s.DependsOn,
-		Secrets: s.Secrets, When: s.When, Type: s.Type,
+		Secrets: s.Secrets, When: s.GetCondition(), Type: s.Type,
 		Docker: s.Docker, Privileged: s.Privileged,
-		Lock: s.Lock, AllowSkip: s.AllowSkip,
+		Lock: s.Lock, AllowSkip: s.AllowSkip, LockTimeout: s.LockTimeout,
 	}
 	if s.Resources != nil {
 		sc.Resources = &ResourceConfig{CPU: s.Resources.CPU, Memory: s.Resources.Memory}
