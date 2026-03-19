@@ -1,6 +1,7 @@
 package workflows
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -36,6 +37,12 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		PipelineName: input.PipelineName,
 	}).Get(ctx, &cloneResult); err != nil {
 		return CIPipelineResult{Status: "failed"}, fmt.Errorf("clone: %w", err)
+	}
+
+	// 1b. Multi-pipeline dispatch: if no specific pipeline requested and repo has multiple,
+	// fan out to one workflow per pipeline and return aggregated result.
+	if (input.PipelineName == "" || input.PipelineName == "default") && len(cloneResult.Pipelines) > 1 {
+		return dispatchPipelines(ctx, input, cloneResult)
 	}
 
 	// 2. Pending status
@@ -117,6 +124,44 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	_ = workflow.ExecuteActivity(dReportCtx, acts.Cleanup, cloneResult.Dir).Get(dCtx, nil)
 
 	return CIPipelineResult{Status: overallStatus, Steps: results, PipelineName: input.PipelineName}, nil
+}
+
+// dispatchPipelines fans out to one child workflow per named pipeline and aggregates results.
+func dispatchPipelines(ctx workflow.Context, input CIPipelineInput, cloneResult activities.CloneResult) (CIPipelineResult, error) {
+	var futures []workflow.ChildWorkflowFuture
+	var names []string
+
+	for _, name := range cloneResult.Pipelines {
+		if name == "default" {
+			continue
+		}
+		childInput := input
+		childInput.PipelineName = name
+
+		childOpts := workflow.ChildWorkflowOptions{
+			WorkflowID: fmt.Sprintf("%s-pipeline-%s", workflow.GetInfo(ctx).WorkflowExecution.ID, name),
+		}
+		childCtx := workflow.WithChildOptions(ctx, childOpts)
+		futures = append(futures, workflow.ExecuteChildWorkflow(childCtx, CIPipeline, childInput))
+		names = append(names, name)
+	}
+
+	overall := "passed"
+	var allSteps []activities.StepResult
+	for i, f := range futures {
+		var result CIPipelineResult
+		if err := f.Get(ctx, &result); err != nil {
+			overall = "failed"
+			allSteps = append(allSteps, activities.StepResult{Name: names[i], Status: "failed"})
+		} else {
+			allSteps = append(allSteps, result.Steps...)
+			if result.Status == "failed" {
+				overall = "failed"
+			}
+		}
+	}
+
+	return CIPipelineResult{Status: overall, Steps: allSteps}, nil
 }
 
 // MatrixChild is a child workflow for a single matrix combination.
@@ -242,6 +287,16 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 				overallStatus = "failed"
 			}
 			continue
+		}
+
+		// Resolve dynamic matrix from upstream step outputs
+		if step.DynamicMatrix != "" {
+			if resolved := resolveDynamicMatrix(step.DynamicMatrix, allOutputs); resolved != nil {
+				if step.Matrix == nil {
+					step.Matrix = &activities.MatrixConfig{Dimensions: map[string][]string{}}
+				}
+				step.Matrix.Dimensions = resolved
+			}
 		}
 
 		// Matrix step: fan out to child workflows
@@ -370,6 +425,18 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 		var r activities.RunStepResult
 		err := workflow.ExecuteActivity(withStepOptions(ctx, step.Timeout), acts.RunStep, stepInput).Get(ctx, &r)
 		duration := workflow.Now(ctx).Sub(start).Seconds()
+
+		// Run per-step post commands (always, even on failure)
+		if len(step.Post) > 0 {
+			postCmd := strings.Join(step.Post, " && ")
+			postInput := activities.RunStepInput{
+				Dir: dir, Command: postCmd, Name: step.Name + "-post", Image: step.Image,
+				Repo: input.Repo, Ref: input.Ref, Secrets: stepSecrets,
+				Docker: step.Docker, Privileged: step.Privileged,
+			}
+			var postResult activities.RunStepResult
+			_ = workflow.ExecuteActivity(withStepOptions(ctx, "10m"), acts.RunStep, postInput).Get(ctx, &postResult)
+		}
 
 		status := "passed"
 		if temporal.IsCanceledError(err) {
@@ -589,6 +656,35 @@ func flattenOutputs(allOutputs map[string]map[string]string) map[string]string {
 		}
 	}
 	return result
+}
+
+func resolveDynamicMatrix(ref string, allOutputs map[string]map[string]string) map[string][]string {
+	parts := strings.Split(ref, ".")
+	var stepName, outputKey string
+	if len(parts) >= 4 && parts[0] == "steps" {
+		stepName = parts[1]
+		outputKey = parts[3]
+	} else {
+		stepName = ref
+		outputKey = "matrix"
+	}
+	outputs, ok := allOutputs[stepName]
+	if !ok {
+		return nil
+	}
+	jsonStr, ok := outputs[outputKey]
+	if !ok {
+		return nil
+	}
+	var dims map[string][]string
+	if json.Unmarshal([]byte(jsonStr), &dims) == nil {
+		return dims
+	}
+	var arr []string
+	if json.Unmarshal([]byte(jsonStr), &arr) == nil {
+		return map[string][]string{"value": arr}
+	}
+	return nil
 }
 
 func depsOK(deps []string, completed map[string]bool) bool {
