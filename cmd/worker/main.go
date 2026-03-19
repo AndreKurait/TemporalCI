@@ -53,6 +53,8 @@ func main() {
 	w.RegisterWorkflow(workflows.CIPipeline)
 	w.RegisterWorkflow(workflows.PodCleanup)
 	w.RegisterWorkflow(workflows.ApprovalGate)
+	w.RegisterWorkflow(workflows.ClusterPool)
+	w.RegisterWorkflow(workflows.HelmTestPipeline)
 
 	acts := &activities.Activities{
 		GitHubToken:    cfg.GitHubToken,
