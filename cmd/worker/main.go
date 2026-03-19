@@ -51,6 +51,7 @@ func main() {
 
 	w := worker.New(c, taskQueue, worker.Options{})
 	w.RegisterWorkflow(workflows.CIPipeline)
+	w.RegisterWorkflow(workflows.MatrixChild)
 	w.RegisterWorkflow(workflows.PodCleanup)
 	w.RegisterWorkflow(workflows.ApprovalGate)
 	w.RegisterWorkflow(workflows.ClusterPool)

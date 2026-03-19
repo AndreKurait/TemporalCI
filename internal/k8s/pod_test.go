@@ -165,3 +165,151 @@ func TestBuildPod_NoArtifactByDefault(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildPod_DockerInDocker(t *testing.T) {
+	pod := buildPod(PodSpec{
+		Name: "ci-test", Namespace: "default",
+		Image: "golang:1.23", Command: []string{"go", "test"},
+		Docker: true,
+	})
+
+	// Should have 2 containers: ci + dind
+	if len(pod.Spec.Containers) != 2 {
+		t.Fatalf("expected 2 containers, got %d", len(pod.Spec.Containers))
+	}
+	dind := pod.Spec.Containers[1]
+	if dind.Name != "dind" {
+		t.Errorf("sidecar name = %q, want dind", dind.Name)
+	}
+	if dind.Image != "docker:27-dind" {
+		t.Errorf("dind image = %q", dind.Image)
+	}
+	if dind.SecurityContext == nil || !*dind.SecurityContext.Privileged {
+		t.Error("dind should be privileged")
+	}
+
+	// Check docker socket volume
+	foundSock := false
+	for _, v := range pod.Spec.Volumes {
+		if v.Name == "docker-sock" {
+			foundSock = true
+		}
+	}
+	if !foundSock {
+		t.Error("docker-sock volume not found")
+	}
+
+	// Check DOCKER_HOST env on main container
+	foundHost := false
+	for _, e := range pod.Spec.Containers[0].Env {
+		if e.Name == "DOCKER_HOST" {
+			foundHost = true
+		}
+	}
+	if !foundHost {
+		t.Error("DOCKER_HOST env not set on main container")
+	}
+}
+
+func TestBuildPod_ServiceContainers(t *testing.T) {
+	pod := buildPod(PodSpec{
+		Name: "ci-test", Namespace: "default",
+		Image: "golang:1.23", Command: []string{"go", "test"},
+		Services: []ServiceSpec{
+			{
+				Name:  "postgres",
+				Image: "postgres:16",
+				Ports: []int{5432},
+				Health: &HealthSpec{
+					Cmd:     "pg_isready",
+					Retries: 30,
+				},
+				Env: map[string]string{"POSTGRES_PASSWORD": "test"},
+			},
+		},
+	})
+
+	if len(pod.Spec.Containers) != 2 {
+		t.Fatalf("expected 2 containers, got %d", len(pod.Spec.Containers))
+	}
+	svc := pod.Spec.Containers[1]
+	if svc.Name != "postgres" {
+		t.Errorf("service name = %q", svc.Name)
+	}
+	if len(svc.Ports) != 1 || svc.Ports[0].ContainerPort != 5432 {
+		t.Errorf("ports = %v", svc.Ports)
+	}
+	if svc.StartupProbe == nil {
+		t.Error("startup probe should be set")
+	} else if svc.StartupProbe.FailureThreshold != 30 {
+		t.Errorf("failure threshold = %d, want 30", svc.StartupProbe.FailureThreshold)
+	}
+}
+
+func TestBuildPod_Privileged(t *testing.T) {
+	pod := buildPod(PodSpec{
+		Name: "ci-test", Namespace: "default",
+		Image: "golang:1.23", Command: []string{"go", "test"},
+		Privileged: true,
+	})
+
+	sc := pod.Spec.Containers[0].SecurityContext
+	if sc == nil || !*sc.Privileged {
+		t.Error("container should be privileged")
+	}
+	if sc.Capabilities == nil || len(sc.Capabilities.Add) == 0 {
+		t.Error("SYS_ADMIN capability should be added")
+	}
+}
+
+func TestBuildPod_CollectOutputs(t *testing.T) {
+	pod := buildPod(PodSpec{
+		Name: "ci-test", Namespace: "default",
+		Image: "golang:1.23", Command: []string{"go", "test"},
+		CollectOutputs: true,
+	})
+
+	foundVol := false
+	foundMount := false
+	for _, v := range pod.Spec.Volumes {
+		if v.Name == "outputs" && v.EmptyDir != nil {
+			foundVol = true
+		}
+	}
+	for _, m := range pod.Spec.Containers[0].VolumeMounts {
+		if m.Name == "outputs" && m.MountPath == "/temporalci/outputs" {
+			foundMount = true
+		}
+	}
+	if !foundVol {
+		t.Error("outputs volume not found")
+	}
+	if !foundMount {
+		t.Error("outputs mount not found")
+	}
+}
+
+func TestParseOutputsFromLogs(t *testing.T) {
+	logs := `Building...
+Done.
+::temporalci-outputs-start::
+CLUSTER_ENDPOINT=https://my-cluster.example.com
+CLUSTER_NAME=integ-42
+::temporalci-outputs-end::
+Cleanup complete.`
+
+	outputs := parseOutputsFromLogs(logs)
+	if outputs["CLUSTER_ENDPOINT"] != "https://my-cluster.example.com" {
+		t.Errorf("CLUSTER_ENDPOINT = %q", outputs["CLUSTER_ENDPOINT"])
+	}
+	if outputs["CLUSTER_NAME"] != "integ-42" {
+		t.Errorf("CLUSTER_NAME = %q", outputs["CLUSTER_NAME"])
+	}
+}
+
+func TestParseOutputsFromLogs_NoMarkers(t *testing.T) {
+	outputs := parseOutputsFromLogs("just some logs\nno outputs here")
+	if len(outputs) != 0 {
+		t.Errorf("expected empty outputs, got %v", outputs)
+	}
+}
