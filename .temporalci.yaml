@@ -1,0 +1,64 @@
+# TemporalCI self-hosting pipeline — dogfooding
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+parameters:
+  - name: DEPLOY
+    type: boolean
+    default: "false"
+    description: "Deploy after build (only on main push)"
+
+steps:
+  - name: test
+    image: golang:1.26
+    command: go test -race -coverprofile=coverage.out ./...
+    timeout: 10m
+    artifacts:
+      upload:
+        - path: coverage.out
+
+  - name: build
+    image: golang:1.26
+    depends_on: [test]
+    commands:
+      - CGO_ENABLED=0 go build -o /artifacts/webhook ./cmd/webhook
+      - CGO_ENABLED=0 go build -o /artifacts/worker ./cmd/worker
+      - CGO_ENABLED=0 go build -o /artifacts/validate ./cmd/validate
+    artifacts:
+      upload:
+        - path: /artifacts/webhook
+        - path: /artifacts/worker
+        - path: /artifacts/validate
+
+  - name: docker-build
+    depends_on: [build]
+    docker: true
+    image: docker:27
+    commands:
+      - docker build -t temporalci/temporalci:$TEMPORALCI_SHA .
+      - docker push temporalci/temporalci:$TEMPORALCI_SHA
+    secrets: [ECR_REGISTRY]
+    timeout: 15m
+
+  - name: deploy
+    depends_on: [docker-build]
+    when: "$DEPLOY == 'true'"
+    image: alpine/helm:latest
+    commands:
+      - helm upgrade temporalci ./deploy/helm --set image.tag=$TEMPORALCI_SHA
+    secrets: [KUBE_TOKEN]
+    timeout: 5m
+
+  - name: all-checks
+    type: gate
+    depends_on: [test, build, docker-build]
+
+post:
+  on_failure:
+    - name: notify
+      command: |
+        curl -X POST $SLACK_WEBHOOK -d '{"text":"TemporalCI CI failed on '$branch'"}'
+      secrets: [SLACK_WEBHOOK]
