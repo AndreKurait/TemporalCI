@@ -1,0 +1,47 @@
+{{- if .Values.localstack.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-localstack-init
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init
+          image: amazon/aws-cli:latest
+          env:
+            - name: AWS_ENDPOINT_URL
+              value: "{{ .Values.aws.endpointURL }}"
+            - name: AWS_ACCESS_KEY_ID
+              value: "{{ .Values.aws.accessKeyID }}"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "{{ .Values.aws.secretAccessKey }}"
+            - name: AWS_DEFAULT_REGION
+              value: "{{ .Values.logs.awsRegion }}"
+          command:
+            - sh
+            - -c
+            - |
+              # Wait for LocalStack
+              for i in $(seq 1 30); do
+                aws s3 ls 2>/dev/null && break
+                sleep 2
+              done
+              # Create S3 log bucket
+              aws s3 mb s3://{{ .Values.logs.s3Bucket }} 2>/dev/null || true
+              # Seed secrets
+              aws secretsmanager create-secret \
+                --name {{ .Values.secrets.prefix }}/github-webhook-secret \
+                --secret-string "dev-secret" 2>/dev/null || true
+              aws secretsmanager create-secret \
+                --name {{ .Values.secrets.prefix }}/github-token \
+                --secret-string "dev-token" 2>/dev/null || true
+              echo "LocalStack initialized"
+{{- end }}
