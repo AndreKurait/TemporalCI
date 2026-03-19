@@ -1,18 +1,11 @@
 @import "tailwindcss";
 
-/* TemporalCI brand colors — Starlight overrides */
+/* TemporalCI brand — only override accent color + fonts.
+   Gray scale uses Starlight defaults which auto-swap in light/dark mode. */
 :root {
   --sl-color-accent-low: #1a1a4e;
   --sl-color-accent: #6d5bf7;
   --sl-color-accent-high: #c7d2fe;
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #eceef2;
-  --sl-color-gray-2: #c0c2c7;
-  --sl-color-gray-3: #888b96;
-  --sl-color-gray-4: #545861;
-  --sl-color-gray-5: #353841;
-  --sl-color-gray-6: #24272f;
-  --sl-color-black: #17181c;
   --sl-font: 'Inter', sans-serif;
   --sl-font-mono: 'JetBrains Mono', monospace;
 }
