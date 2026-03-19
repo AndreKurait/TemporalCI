@@ -1,0 +1,115 @@
+---
+title: Why We Built CI on Temporal
+description: The technical reasoning behind using Temporal's durable execution model for CI/CD pipelines.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+*March 2025*
+
+Every CI system we've used has the same fundamental problem: **pipelines are ephemeral processes.** They start, they run, and if anything goes wrong — node crash, network timeout, OOM kill — the entire pipeline is lost. You click "re-run" and hope for the best.
+
+We kept asking: why does CI still work this way? The distributed systems world solved this problem years ago with durable execution. Why hasn't CI caught up?
+
+## The Insight
+
+[Temporal](https://temporal.io/) is a durable execution platform. It was built so that long-running processes — order fulfillment, payment processing, data pipelines — can survive infrastructure failures and resume exactly where they left off.
+
+A CI pipeline is just another long-running process:
+
+1. Clone a repo
+2. Run some commands in containers
+3. Report results
+
+Each of those steps is an **activity** in Temporal's model. If the worker running step 2 crashes, Temporal replays the workflow on a new worker, skips the already-completed clone, and re-executes only the failed step.
+
+This isn't retry-from-scratch. This is **resume-from-checkpoint**, built into the execution model.
+
+## What This Gives Us for Free
+
+By building on Temporal, we get capabilities that other CI systems have to build from scratch (and usually don't):
+
+### Automatic Retries with Backoff
+
+Each activity has its own retry policy. A `git clone` that fails due to a transient network error gets retried 3 times with exponential backoff. A build step that fails because of a real code error gets retried once (or not at all). The retry policy is per-activity, not per-pipeline.
+
+```go
+// Clone gets 3 retries — network failures are transient
+cloneOpts := workflow.ActivityOptions{
+    RetryPolicy: &temporal.RetryPolicy{
+        MaximumAttempts: 3,
+        InitialInterval: 5 * time.Second,
+        BackoffCoefficient: 2.0,
+    },
+}
+
+// Build steps get 1 retry — failures are usually real
+stepOpts := workflow.ActivityOptions{
+    RetryPolicy: &temporal.RetryPolicy{
+        MaximumAttempts: 1,
+    },
+}
+```
+
+### Graceful Cancellation
+
+When a new push arrives on the same branch, we cancel the previous workflow. In most CI systems, cancellation means "kill the process and hope for the best." In Temporal, cancellation is a signal — the workflow catches it and runs cleanup:
+
+1. Cancel running activities
+2. Delete orphaned K8s pods
+3. Report "cancelled" to GitHub (not "pending forever")
+
+This happens in a **disconnected context** that survives the cancellation itself.
+
+### Full Observability
+
+Every workflow execution is recorded. You can:
+
+- See the exact input and output of every activity
+- See how long each step took
+- Replay any workflow execution to debug failures
+- Query running workflows for real-time status
+
+The Temporal Web UI gives you this for free. No custom dashboards, no log aggregation setup, no Prometheus queries. Just open the UI and click on a workflow.
+
+<Aside type="tip">
+The Temporal Web UI link is included in every PR comment, so developers can jump straight from a failed build to the full execution trace.
+</Aside>
+
+## Why Not Just Use Temporal Directly?
+
+You could write Temporal workflows for CI yourself. TemporalCI is the opinionated layer on top:
+
+- **`.temporalci.yaml`** — declare your pipeline in 12 lines, not 200 lines of Go
+- **GitHub integration** — webhook handling, commit status, PR comments with logs
+- **K8s pod execution** — each step in an isolated pod with resource limits
+- **Helm chart** — one `helm install` gets Temporal + workers + webhook server running
+- **Security defaults** — CI pods get zero K8s API access, network policies isolate them
+
+TemporalCI is to Temporal what GitHub Actions is to Azure Pipelines — a focused, opinionated CI experience built on a powerful execution engine.
+
+## The Trade-offs
+
+We're honest about what TemporalCI is and isn't:
+
+**Good for:**
+- Teams that run CI on their own Kubernetes clusters
+- Go, container, and infrastructure workloads
+- Organizations that want full control over their CI infrastructure
+- Teams that value observability and debuggability
+
+**Not (yet) good for:**
+- Teams that want zero infrastructure management (use GitHub Actions)
+- Projects that need a massive ecosystem of pre-built actions/plugins
+- Non-Kubernetes environments
+
+## What's Next
+
+TemporalCI is open source and actively developed. We're working on:
+
+- Ephemeral EKS clusters for Helm chart testing
+- Matrix builds across multiple language versions
+- GitHub App integration for richer Check Runs
+- Monorepo support with changed-path detection
+
+Check the [roadmap](/TemporalCI/roadmap/) for the full plan, or [get started](/TemporalCI/getting-started/quickstart/) in 5 minutes on minikube.

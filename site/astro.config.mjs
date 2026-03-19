@@ -70,6 +70,13 @@ export default defineConfig({
             { label: 'Roadmap', slug: 'roadmap' },
           ],
         },
+        {
+          label: 'Blog',
+          items: [
+            { label: 'All Posts', slug: 'blog' },
+            { label: 'Why We Built CI on Temporal', slug: 'blog/why-temporal-for-ci' },
+          ],
+        },
       ],
       customCss: [
         '@fontsource/inter/400.css',
