@@ -16,6 +16,12 @@ variable "ecr_repo_name" {
   default     = "temporalci"
 }
 
+variable "github_repo" {
+  description = "GitHub repository (owner/repo) for OIDC federation"
+  type        = string
+  default     = "AndreKurait/TemporalCI"
+}
+
 # --- RDS (provisioned via ACK, but Terraform manages the subnet group) ---
 
 variable "rds_instance_class" {

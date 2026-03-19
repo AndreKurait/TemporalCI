@@ -4,33 +4,33 @@ on:
   push:
     branches: [main]
 
+permissions:
+  id-token: write   # Required for OIDC federation with AWS
+  contents: write   # Required for GitOps tag commit
+  deployments: write
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     if: ${{ vars.SKIP_DOCKER != 'true' }}
-    permissions:
-      contents: write
-      deployments: write
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push
         env:
-          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
         run: |
           IMAGE="${ECR_REGISTRY}/temporalci"
           docker build -t "${IMAGE}:${GITHUB_SHA}" -t "${IMAGE}:latest" .
@@ -66,6 +66,5 @@ jobs:
               repo: context.repo.repo,
               deployment_id: deployment.data.id,
               state: 'success',
-              description: 'Image pushed to ECR, ArgoCD will sync',
-              environment_url: 'http://<ELB_HOSTNAME>'
+              description: 'Image pushed to ECR, ArgoCD will sync'
             });
