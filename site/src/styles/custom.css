@@ -516,18 +516,119 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
   line-height: 1.5;
 }
 
-/* Architecture diagram — Mermaid rendered */
+/* Architecture diagram — HTML/CSS with AWS icons */
 .arch-section {
   margin-top: 3rem;
 }
 
-.arch-section pre.mermaid {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+.arch-box {
+  border: 2px solid var(--accent);
   border-radius: 0.75rem;
-  padding: 2rem;
+  padding: 1.5rem;
+  background: var(--bg-surface);
+}
+
+.arch-box-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  color: var(--text-primary);
+}
+
+.arch-box-title img {
+  width: 28px;
+  height: 28px;
+}
+
+.arch-nodes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.arch-node {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  background: var(--sl-color-black);
+}
+
+.arch-node img {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.arch-node-text {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.arch-node-sub {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.arch-arrow {
   text-align: center;
-  overflow-x: auto;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.arch-managed {
+  border: 1px dashed var(--border-subtle);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.arch-managed-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.arch-services {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.arch-svc {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.arch-svc img {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.arch-svc i {
+  width: 20px;
+  text-align: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .arch-nodes {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Quickstart section */
