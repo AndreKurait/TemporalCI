@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
@@ -71,17 +70,6 @@ func (a *Activities) ProvisionCluster(ctx context.Context, input ClusterInput) (
 		RoleArn: &input.RoleARN,
 		ResourcesVpcConfig: &types.VpcConfigRequest{
 			SubnetIds: input.SubnetIDs,
-		},
-		ComputeConfig: &types.ComputeConfigRequest{
-			Enabled:    aws.Bool(true),
-			NodePools:  []string{"general-purpose"},
-			NodeRoleArn: &input.NodeRoleARN,
-		},
-		KubernetesNetworkConfig: &types.KubernetesNetworkConfigRequest{
-			ElasticLoadBalancing: &types.ElasticLoadBalancingRequest{Enabled: aws.Bool(true)},
-		},
-		StorageConfig: &types.StorageConfigRequest{
-			BlockStorage: &types.BlockStorageRequest{Enabled: aws.Bool(true)},
 		},
 		AccessConfig: &types.CreateAccessConfigRequest{
 			AuthenticationMode: types.AuthenticationModeApiAndConfigMap,
