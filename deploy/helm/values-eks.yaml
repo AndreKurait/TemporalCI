@@ -1,5 +1,5 @@
 image:
-  registry: 730335467872.dkr.ecr.us-east-1.amazonaws.com
+  registry: 969644818851.dkr.ecr.us-east-1.amazonaws.com
   tag: e934dc79902bd47a47543fcf3353619dd38a0cc6
   pullPolicy: Always
 
