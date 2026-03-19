@@ -59,29 +59,31 @@ func (a *Activities) ProvisionCluster(ctx context.Context, input ClusterInput) (
 	log := a.logger(ctx).With("cluster", input.Name)
 	log.Info("provisioning EKS cluster")
 
+	// Use AWS CLI for cluster creation — the Go SDK doesn't have Auto Mode types yet
+	subnets := strings.Join(input.SubnetIDs, ",")
+	createCmd := exec.CommandContext(ctx, "aws", "eks", "create-cluster",
+		"--name", input.Name,
+		"--region", input.Region,
+		"--role-arn", input.RoleARN,
+		"--resources-vpc-config", fmt.Sprintf("subnetIds=%s", subnets),
+		"--compute-config", fmt.Sprintf("enabled=true,nodePools=general-purpose,nodeRoleArn=%s", input.NodeRoleARN),
+		"--kubernetes-network-config", "elasticLoadBalancing={enabled=true}",
+		"--storage-config", "blockStorage={enabled=true}",
+		"--access-config", "authenticationMode=API",
+	)
+	out, err := createCmd.CombinedOutput()
+	if err != nil {
+		if !strings.Contains(string(out), "ResourceInUseException") {
+			return ClusterResult{}, fmt.Errorf("create cluster: %s: %w", string(out), err)
+		}
+		log.Info("cluster already exists, waiting for it")
+	}
+
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(input.Region))
 	if err != nil {
 		return ClusterResult{}, fmt.Errorf("aws config: %w", err)
 	}
 	client := eks.NewFromConfig(cfg)
-
-	_, err = client.CreateCluster(ctx, &eks.CreateClusterInput{
-		Name:    &input.Name,
-		RoleArn: &input.RoleARN,
-		ResourcesVpcConfig: &types.VpcConfigRequest{
-			SubnetIds: input.SubnetIDs,
-		},
-		AccessConfig: &types.CreateAccessConfigRequest{
-			AuthenticationMode: types.AuthenticationModeApiAndConfigMap,
-		},
-	})
-	if err != nil {
-		// Ignore "already exists" — cluster may be from a previous attempt
-		if !isAlreadyExists(err) {
-			return ClusterResult{}, fmt.Errorf("create cluster: %w", err)
-		}
-		log.Info("cluster already exists, waiting for it")
-	}
 
 	// Poll until ACTIVE
 	for {
