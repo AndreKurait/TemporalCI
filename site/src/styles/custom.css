@@ -202,9 +202,9 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 
 .btn-secondary:hover { border-color: var(--text-muted); }
 
-/* Terminal block */
+/* Terminal block — always dark (code blocks stay dark in both themes) */
 .terminal {
-  background: #0d0d0d;
+  background: var(--sl-color-black);
   border: 1px solid var(--border-subtle);
   border-radius: 0.75rem;
   max-width: 680px;
@@ -453,7 +453,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 
 .comparison-table th.highlight {
   color: var(--accent);
-  background: rgba(109, 91, 247, 0.05);
+  background: var(--sl-color-accent-low);
 }
 
 .comparison-table td {
@@ -465,7 +465,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 
 .comparison-table td.highlight {
   color: var(--text-primary);
-  background: rgba(109, 91, 247, 0.03);
+  background: var(--sl-color-accent-low);
 }
 
 .comparison-table tr:last-child td { border-bottom: none; }
@@ -576,7 +576,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 
 .qs-content code {
   display: block;
-  background: #0d0d0d;
+  background: var(--sl-color-black);
   border: 1px solid var(--border-subtle);
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
@@ -752,7 +752,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
 
 .qs-config-block {
   display: block;
-  background: #0d0d0d;
+  background: var(--sl-color-black);
   border: 1px solid var(--border-subtle);
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
