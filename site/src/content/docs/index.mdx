@@ -1,0 +1,72 @@
+---
+title: TemporalCI
+description: The CI system that never loses your build. Kubernetes-native pipelines powered by Temporal.
+template: splash
+hero:
+  tagline: Kubernetes-native CI built on Temporal. Durable, observable, replayable pipelines — even if infrastructure crashes mid-build.
+  actions:
+    - text: Get Started
+      link: /TemporalCI/getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/AndreKurait/TemporalCI
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Why TemporalCI?
+
+Every CI system today has the same fundamental flaw: **pipelines are ephemeral processes.** A network blip kills your 45-minute build. A node eviction loses your test results. TemporalCI fixes this by treating every pipeline as a durable Temporal workflow.
+
+<CardGrid stagger>
+  <Card title="Durable Pipelines" icon="rocket">
+    If the worker crashes mid-build, Temporal replays the workflow and resumes from the last completed activity. No lost work.
+  </Card>
+  <Card title="K8s-Native Execution" icon="seti:docker">
+    Each CI step runs in its own isolated Kubernetes pod. Proper resource limits, node isolation, and automatic cleanup.
+  </Card>
+  <Card title="DAG-Based Steps" icon="random">
+    Steps declare dependencies. Independent steps run in parallel. Failed dependencies skip downstream steps automatically.
+  </Card>
+  <Card title="GitHub-Native Reporting" icon="github">
+    Commit status, PR comments with collapsible logs, per-step timing, and a direct link to the Temporal Web UI.
+  </Card>
+  <Card title="Zero Stored Credentials" icon="approve-check">
+    GitHub Actions authenticates to AWS via OIDC federation. No access keys. No rotation. No secrets to leak.
+  </Card>
+  <Card title="Full Observability" icon="magnifier">
+    Every execution is inspectable and replayable in the Temporal Web UI. See exact inputs, outputs, and timing for every activity.
+  </Card>
+</CardGrid>
+
+## How It Compares
+
+| | Traditional CI | TemporalCI |
+|---|---|---|
+| Pipeline dies on crash | Start over | Resumes exactly where it left off |
+| Retry | Re-run entire pipeline | Re-execute only the failed activity |
+| Logs | Disappear on failure | Every execution fully inspectable |
+| Scaling | More runners to manage | More K8s pods, auto-provisioned |
+| Infrastructure | Static | Ephemeral EKS clusters on demand |
+
+## Quick Start
+
+```yaml
+# .temporalci.yaml
+steps:
+  - name: build
+    image: golang:1.26
+    command: go build ./...
+
+  - name: test
+    image: golang:1.26
+    command: go test -v ./...
+    depends_on: [build]
+
+  - name: lint
+    image: golangci/golangci-lint:latest
+    command: golangci-lint run
+    depends_on: [build]
+```
