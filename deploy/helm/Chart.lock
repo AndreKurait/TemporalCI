@@ -5,5 +5,8 @@ dependencies:
 - name: postgresql
   repository: https://charts.bitnami.com/bitnami
   version: 16.4.3
-digest: sha256:abc24522e008ef0f0a1448f86b5ad4ebcd7df82b766d2208377b8b674ae51aaf
-generated: "2026-03-14T11:53:32.631163095Z"
+- name: localstack
+  repository: https://localstack.github.io/helm-charts
+  version: 0.6.18
+digest: sha256:5661f402f98957bc51b93916d8ff98c57b028a5e6b57de705977312461c3ce62
+generated: "2026-03-19T21:41:46.749018912Z"
