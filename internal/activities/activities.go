@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v70/github"
 	"go.temporal.io/sdk/activity"
 	"k8s.io/client-go/kubernetes"
 

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v70/github"
 )
 
 // Client wraps GitHub App authentication, providing installation-scoped tokens.

@@ -77,8 +77,8 @@ func LoadPipelineConfig(dir string) (*PipelineConfig, error) {
 func DefaultConfig() *PipelineConfig {
 	return &PipelineConfig{
 		Steps: []StepConfig{
-			{Name: "build", Image: "golang:1.23", Command: "go build ./..."},
-			{Name: "test", Image: "golang:1.23", Command: "go test ./..."},
+			{Name: "build", Image: "golang:1.26", Command: "go build ./..."},
+			{Name: "test", Image: "golang:1.26", Command: "go test ./..."},
 		},
 	}
 }

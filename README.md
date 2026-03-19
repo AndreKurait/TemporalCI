@@ -52,11 +52,11 @@ Steps declare dependencies. Independent steps run in parallel. Failed dependenci
 ```yaml
 steps:
   - name: build
-    image: golang:1.23
+    image: golang:1.26
     command: go build ./...
 
   - name: unit-test
-    image: golang:1.23
+    image: golang:1.26
     command: go test ./...
     depends_on: [build]
 
@@ -66,7 +66,7 @@ steps:
     depends_on: [build]
 
   - name: integration-test
-    image: golang:1.23
+    image: golang:1.26
     command: go test -tags=integration ./...
     depends_on: [unit-test]
 ```
@@ -128,12 +128,12 @@ Add `.temporalci.yaml` to any repository:
 ```yaml
 steps:
   - name: build
-    image: golang:1.23
+    image: golang:1.26
     command: go build ./...
     timeout: 5m
 
   - name: test
-    image: golang:1.23
+    image: golang:1.26
     command: go test -v ./...
     timeout: 5m
     depends_on: [build]

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v70/github"
 )
 
 // CheckRunInput defines the input for creating GitHub Check Runs.
