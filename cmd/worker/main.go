@@ -131,7 +131,6 @@ func scheduleCleanup(c client.Client) {
 		Action: &client.ScheduleWorkflowAction{
 			ID: "pod-cleanup", Workflow: workflows.PodCleanup, TaskQueue: taskQueue,
 		},
-		Overlap: client.ScheduleOverlapSkip,
 	})
 	if err != nil {
 		slog.Info("schedule create result", "error", err)
