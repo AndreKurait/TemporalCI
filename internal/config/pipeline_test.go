@@ -596,3 +596,77 @@ func containsStr(s, sub string) bool {
 	}
 	return false
 }
+
+func TestMatrixStepConfig(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: gradle-tests
+    image: temporalci/ci-base:opensearch-migrations
+    matrix:
+      index: ["0", "1", "2", "3", "4"]
+      fail_fast: false
+      max_parallel: 10
+    command: ./gradlew allTests -Dtest.striping.total=5 -Dtest.striping.index=${{ matrix.index }}
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := cfg.Steps[0]
+	if step.Matrix == nil {
+		t.Fatal("matrix should not be nil")
+	}
+	if len(step.Matrix.Dimensions["index"]) != 5 {
+		t.Errorf("expected 5 index values, got %d", len(step.Matrix.Dimensions["index"]))
+	}
+	if step.Matrix.FailFast == nil || *step.Matrix.FailFast != false {
+		t.Error("fail_fast should be false")
+	}
+	if step.Matrix.MaxParallel != 10 {
+		t.Errorf("max_parallel = %d, want 10", step.Matrix.MaxParallel)
+	}
+}
+
+func TestDynamicMatrixConfig(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: generate
+    command: echo '["a","b","c"]' > /artifacts/matrix.json
+  - name: run
+    dynamic_matrix: steps.generate.outputs.matrix
+    depends_on: [generate]
+    command: echo $MATRIX_VALUE
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Steps[1].DynamicMatrix != "steps.generate.outputs.matrix" {
+		t.Errorf("dynamic_matrix = %q", cfg.Steps[1].DynamicMatrix)
+	}
+}
+
+func TestAllowSkipConfig(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `steps:
+  - name: optional
+    command: echo maybe
+    allow-skip: true
+  - name: gate
+    type: gate
+    depends_on: [optional]
+`
+	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(yaml), 0644)
+
+	cfg, err := LoadPipelineConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Steps[0].AllowSkip {
+		t.Error("allow-skip should be true")
+	}
+}
