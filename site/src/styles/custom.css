@@ -23,6 +23,60 @@
   --sl-color-accent-high: #312e81;
 }
 
+/* Hide Starlight's default hero/chrome when landing page is present */
+.landing-page ~ *,
+.landing-page + * {
+  /* Don't hide siblings */
+}
+
+/* When the splash template renders, hide Starlight's hero wrapper */
+.hero:has(+ .sl-markdown-content .landing-page),
+.sl-markdown-content:has(.landing-page) > :not(.landing-page) {
+  display: none;
+}
+
+/* Hide the default Starlight hero on splash pages with our custom content */
+[data-page-title="TemporalCI — CI Pipelines That Never Lose Your Work"] {
+  display: none;
+}
+
+.hero.astro-jbfsktt5:has(+ * .landing-page) {
+  display: none;
+}
+
+/* Also hide Starlight's sidebar and header on the landing page */
+body:has(.landing-page) .sidebar-pane,
+body:has(.landing-page) .right-sidebar-panel {
+  display: none;
+}
+
+body:has(.landing-page) header.header {
+  display: none;
+}
+
+body:has(.landing-page) .main-pane {
+  --sl-content-width: 100%;
+  padding-inline-start: 0;
+}
+
+body:has(.landing-page) .content-panel {
+  max-width: 100%;
+  padding: 0;
+}
+
+body:has(.landing-page) .sl-container {
+  max-width: 100%;
+  padding: 0;
+}
+
+body:has(.landing-page) .main-frame {
+  padding-inline-start: 0;
+}
+
+body:has(.landing-page) main {
+  padding: 0;
+}
+
 /* Landing page styles */
 .landing-page {
   --bg-primary: #0a0a0a;
