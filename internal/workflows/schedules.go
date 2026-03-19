@@ -33,7 +33,7 @@ func SyncSchedules(ctx context.Context, tc client.Client, repo string, pipelines
 						PipelineName: name,
 					}},
 				},
-				Overlap: client.ScheduleOverlapPolicySkip,
+				// Default overlap policy is Skip
 			})
 			if err != nil {
 				// Try update if already exists
