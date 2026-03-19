@@ -23,35 +23,21 @@
   --sl-color-accent-high: #312e81;
 }
 
-/* Hide Starlight's default hero/chrome when landing page is present */
-.landing-page ~ *,
-.landing-page + * {
-  /* Don't hide siblings */
-}
-
-/* When the splash template renders, hide Starlight's hero wrapper */
-.hero:has(+ .sl-markdown-content .landing-page),
-.sl-markdown-content:has(.landing-page) > :not(.landing-page) {
-  display: none;
-}
-
-/* Hide the default Starlight hero on splash pages with our custom content */
-[data-page-title="TemporalCI — CI Pipelines That Never Lose Your Work"] {
-  display: none;
-}
-
-.hero.astro-jbfsktt5:has(+ * .landing-page) {
-  display: none;
-}
-
-/* Also hide Starlight's sidebar and header on the landing page */
+/* ── Landing page: hide all Starlight chrome ── */
+body:has(.landing-page) header.header,
 body:has(.landing-page) .sidebar-pane,
 body:has(.landing-page) .right-sidebar-panel {
-  display: none;
+  display: none !important;
 }
 
-body:has(.landing-page) header.header {
-  display: none;
+/* Remove Starlight's default hero (empty title/tagline) */
+body:has(.landing-page) .hero[class*="astro-"] {
+  display: none !important;
+}
+
+/* Full-width layout — remove Starlight's content constraints */
+body:has(.landing-page) .main-frame {
+  padding-inline-start: 0;
 }
 
 body:has(.landing-page) .main-pane {
@@ -59,22 +45,23 @@ body:has(.landing-page) .main-pane {
   padding-inline-start: 0;
 }
 
-body:has(.landing-page) .content-panel {
-  max-width: 100%;
-  padding: 0;
-}
-
+body:has(.landing-page) .content-panel,
 body:has(.landing-page) .sl-container {
   max-width: 100%;
   padding: 0;
 }
 
-body:has(.landing-page) .main-frame {
-  padding-inline-start: 0;
-}
-
 body:has(.landing-page) main {
   padding: 0;
+}
+
+/* Remove any Starlight-generated margins/padding around our content */
+body:has(.landing-page) .sl-markdown-content {
+  padding: 0;
+}
+
+body:has(.landing-page) .sl-markdown-content > :not(.landing-page) {
+  display: none;
 }
 
 /* Landing page styles */
@@ -707,4 +694,75 @@ body:has(.landing-page) main {
   border: none;
   border-top: 1px solid var(--border-subtle);
   margin: 0;
+}
+
+/* New element styles (div-based to avoid MDX p-wrapping) */
+.pain-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.feature-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.annotation-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.flow-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.terminal-filename {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.config-terminal {
+  max-width: none;
+}
+
+.val-purple { color: #a78bfa; }
+.val-yellow { color: #fbbf24; }
+.val-green { color: #34d399; }
+
+.arch-section {
+  margin-top: 3rem;
+}
+
+.arch-diagram .hl { color: var(--accent); }
+.arch-diagram .lb { color: var(--text-muted); }
+
+.qs-config-block {
+  display: block;
+  background: #0d0d0d;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-family: 'JetBrains Mono Variable', monospace;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+.qs-cta {
+  margin-top: 2.5rem;
+}
+
+.footer-cta-sub {
+  color: var(--text-secondary);
+  margin: 0 0 2rem;
+  font-size: 1.0625rem;
 }
