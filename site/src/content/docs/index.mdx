@@ -185,40 +185,73 @@ hero:
   </div>
 
   <div class="arch-section">
-    <pre class="mermaid">
-{`graph TB
-    subgraph EKS["EKS Auto Mode Cluster"]
-        direction TB
-        TS["Temporal Server"]
-        TW["TemporalCI Workers<br/>(Go, Temporal SDK)"]
-        TS <-->|"gRPC"| TW
+    <div class="arch-box">
+      <div class="arch-box-title">
+        <img src="/TemporalCI/icons/aws/eks.svg" alt="" /> EKS Auto Mode Cluster
+      </div>
 
-        DB["RDS PostgreSQL<br/>(via ACK)"]
-        PODS["CI Job Pods<br/>[ci-jobs NodePool]"]
+      <div class="arch-nodes">
+        <div class="arch-node">
+          <i class="fa-solid fa-bolt" style="font-size:1.5rem;color:var(--accent)"></i>
+          <div>
+            <div class="arch-node-text">Temporal Server</div>
+            <div class="arch-node-sub">Workflow orchestration</div>
+          </div>
+        </div>
+        <div class="arch-node">
+          <i class="fa-solid fa-gears" style="font-size:1.5rem;color:var(--accent)"></i>
+          <div>
+            <div class="arch-node-text">TemporalCI Workers</div>
+            <div class="arch-node-sub">Go · Temporal SDK</div>
+          </div>
+        </div>
+      </div>
 
-        TS --> DB
-        TW --> PODS
+      <div class="arch-arrow">▼ connects to ▼</div>
 
-        subgraph Managed["AWS Managed Services"]
-            CAP["EKS Capabilities: Argo CD · ACK"]
-            ADD["EKS Add-ons: Secrets Store CSI · CloudWatch"]
-            AUTO["Auto Mode: Compute · VPC CNI · CoreDNS · EBS CSI"]
-        end
-    end
+      <div class="arch-nodes">
+        <div class="arch-node">
+          <img src="/TemporalCI/icons/aws/rds.svg" alt="" />
+          <div>
+            <div class="arch-node-text">RDS PostgreSQL</div>
+            <div class="arch-node-sub">via ACK</div>
+          </div>
+        </div>
+        <div class="arch-node">
+          <i class="fa-brands fa-docker" style="font-size:1.5rem;color:#2496ED"></i>
+          <div>
+            <div class="arch-node-text">CI Job Pods</div>
+            <div class="arch-node-sub">ci-jobs NodePool</div>
+          </div>
+        </div>
+      </div>
 
-    GH["GitHub Webhook"] -->|"push/PR event"| TW
-
-    style EKS fill:transparent,stroke:#6d5bf7,stroke-width:2px,color:#fff
-    style Managed fill:transparent,stroke:#545861,stroke-width:1px,stroke-dasharray:5 5
-    style TS fill:#1a1a4e,stroke:#6d5bf7,color:#fff
-    style TW fill:#1a1a4e,stroke:#6d5bf7,color:#fff
-    style DB fill:#141414,stroke:#545861,color:#a1a1a1
-    style PODS fill:#141414,stroke:#545861,color:#a1a1a1
-    style GH fill:#141414,stroke:#545861,color:#a1a1a1
-    style CAP fill:transparent,stroke:none,color:#888b96
-    style ADD fill:transparent,stroke:none,color:#888b96
-    style AUTO fill:transparent,stroke:none,color:#888b96`}
-    </pre>
+      <div class="arch-managed">
+        <div class="arch-managed-title">AWS Managed Services</div>
+        <div class="arch-services">
+          <div class="arch-svc">
+            <img src="/TemporalCI/icons/aws/eks.svg" alt="" />
+            EKS Capabilities: Argo CD · ACK
+          </div>
+          <div class="arch-svc">
+            <img src="/TemporalCI/icons/aws/secrets-manager.svg" alt="" />
+            Secrets Store CSI Driver · AWS Secrets Manager
+          </div>
+          <div class="arch-svc">
+            <img src="/TemporalCI/icons/aws/cloudwatch.svg" alt="" />
+            CloudWatch Observability · Container Insights
+          </div>
+          <div class="arch-svc">
+            <img src="/TemporalCI/icons/aws/vpc.svg" alt="" />
+            Auto Mode: Compute · VPC CNI · CoreDNS · EBS CSI
+          </div>
+          <div class="arch-svc">
+            <img src="/TemporalCI/icons/aws/ecr.svg" alt="" />
+            ECR · Container image registry
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -412,14 +445,8 @@ hero:
   </div>
 </section>
 
-{/* ── Mermaid init + Scroll animation ── */}
+{/* ── Scroll animation ── */}
 <script is:inline>{`
-  // Mermaid: init with theme matching Starlight
-  if (window.mermaid) {
-    const isDark = document.documentElement.dataset.theme !== 'light';
-    mermaid.initialize({ startOnLoad: true, theme: isDark ? 'dark' : 'default' });
-  }
-  // Scroll fade-in
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
