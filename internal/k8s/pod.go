@@ -88,9 +88,17 @@ func RunPod(ctx context.Context, client kubernetes.Interface, spec PodSpec) (Pod
 		return PodResult{}, fmt.Errorf("wait pod: %w", err)
 	}
 
-	logs, err := getPodLogs(ctx, client, spec.Namespace, created.Name)
+	logs, err := getPodLogs(ctx, client, spec.Namespace, created.Name, "ci")
 	if err != nil {
 		return PodResult{}, fmt.Errorf("get logs: %w", err)
+	}
+
+	// Collect service container logs
+	for _, svc := range spec.Services {
+		svcLogs, err := getPodLogs(ctx, client, spec.Namespace, created.Name, svc.Name)
+		if err == nil && svcLogs != "" {
+			logs += fmt.Sprintf("\n--- %s logs ---\n%s", svc.Name, svcLogs)
+		}
 	}
 
 	finished, err := client.CoreV1().Pods(spec.Namespace).Get(ctx, created.Name, metav1.GetOptions{})
@@ -357,7 +365,7 @@ func readOutputs(ctx context.Context, client kubernetes.Interface, namespace, na
 	_ = req // placeholder — actual exec requires SPDY executor setup
 
 	// Fallback: parse outputs from pod logs using a marker convention
-	logs, err := getPodLogs(ctx, client, namespace, name)
+	logs, err := getPodLogs(ctx, client, namespace, name, "ci")
 	if err != nil {
 		return nil, err
 	}
@@ -415,8 +423,12 @@ func waitForPod(ctx context.Context, client kubernetes.Interface, namespace, nam
 	return fmt.Errorf("watch closed before pod completed")
 }
 
-func getPodLogs(ctx context.Context, client kubernetes.Interface, namespace, name string) (string, error) {
-	req := client.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
+func getPodLogs(ctx context.Context, client kubernetes.Interface, namespace, name, container string) (string, error) {
+	opts := &corev1.PodLogOptions{}
+	if container != "" {
+		opts.Container = container
+	}
+	req := client.CoreV1().Pods(namespace).GetLogs(name, opts)
 	stream, err := req.Stream(ctx)
 	if err != nil {
 		return "", err

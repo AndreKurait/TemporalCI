@@ -404,11 +404,20 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 				StartToCloseTimeout: 30 * time.Second,
 				RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
 			})
-			err := workflow.ExecuteActivity(stsCtx, acts.AssumeRole, activities.AssumeRoleInput{
+			assumeInput := activities.AssumeRoleInput{
 				RoleARN:     step.AWSRole.ARN,
 				SessionName: step.AWSRole.SessionName,
 				Duration:    int32(step.AWSRole.Duration),
-			}).Get(ctx, &creds)
+			}
+			// Credential chaining: use outputs from a previous step
+			if step.AWSRole.SourceCredentials != "" {
+				if srcOutputs, ok := allOutputs[step.AWSRole.SourceCredentials]; ok {
+					assumeInput.SourceAccessKey = srcOutputs["AWS_ACCESS_KEY_ID"]
+					assumeInput.SourceSecretKey = srcOutputs["AWS_SECRET_ACCESS_KEY"]
+					assumeInput.SourceSessionToken = srcOutputs["AWS_SESSION_TOKEN"]
+				}
+			}
+			err := workflow.ExecuteActivity(stsCtx, acts.AssumeRole, assumeInput).Get(ctx, &creds)
 			if err != nil {
 				if lockResource != "" {
 					ReleaseLock(ctx, lockResource)
@@ -420,6 +429,12 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 			stepSecrets["AWS_ACCESS_KEY_ID"] = creds.AccessKeyID
 			stepSecrets["AWS_SECRET_ACCESS_KEY"] = creds.SecretAccessKey
 			stepSecrets["AWS_SESSION_TOKEN"] = creds.SessionToken
+			// Store for credential chaining by downstream steps
+			allOutputs[step.Name] = map[string]string{
+				"AWS_ACCESS_KEY_ID":     creds.AccessKeyID,
+				"AWS_SECRET_ACCESS_KEY": creds.SecretAccessKey,
+				"AWS_SESSION_TOKEN":     creds.SessionToken,
+			}
 		}
 
 		var r activities.RunStepResult

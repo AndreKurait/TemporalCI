@@ -407,7 +407,7 @@ func parseEvent(event string, body []byte) ([]workflows.CIPipelineInput, error) 
 	switch event {
 	case "push":
 		return parsePushEvent(body)
-	case "pull_request":
+	case "pull_request", "pull_request_target":
 		return parsePREvent(body)
 	case "release":
 		return parseReleaseEvent(body)
@@ -441,6 +441,8 @@ func parsePushEvent(body []byte) ([]workflows.CIPipelineInput, error) {
 	// Detect tag push
 	if strings.HasPrefix(push.Ref, "refs/tags/") {
 		input.Event = "tag"
+		tagName := strings.TrimPrefix(push.Ref, "refs/tags/")
+		input.Parameters = map[string]string{"TEMPORALCI_TAG": tagName}
 	}
 
 	return []workflows.CIPipelineInput{input}, nil
