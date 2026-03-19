@@ -1,6 +1,6 @@
 image:
   registry: 969644818851.dkr.ecr.us-east-1.amazonaws.com
-  tag: dd53147fbd908f64d739757b1db216b751a062b3
+  tag: 4949ccaba8f269584402a654227c2d91f76b209b
   pullPolicy: Always
 
 worker:
