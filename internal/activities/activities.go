@@ -23,18 +23,19 @@ import (
 
 // Activities holds shared dependencies for all activity methods.
 type Activities struct {
-	K8sClient      kubernetes.Interface
-	GitHubToken    string
-	GitHubApp      *ghapp.Client // GitHub App auth (preferred over PAT)
-	TemporalWebURL string
-	Namespace      string
-	S3Client       S3Uploader
-	S3Full         S3FullClient // extended S3 client for artifact list/get
-	S3Presigner    S3Presigner
-	LogBucket      string
-	CINodePool     bool
-	SecretsClient  SecretsClient
-	SecretsPrefix  string
+	K8sClient       kubernetes.Interface
+	GitHubToken     string
+	GitHubApp       *ghapp.Client // GitHub App auth (preferred over PAT)
+	TemporalWebURL  string
+	Namespace       string
+	S3Client        S3Uploader
+	S3Full          S3FullClient // extended S3 client for artifact list/get
+	S3Presigner     S3Presigner
+	LogBucket       string
+	CINodePool      bool
+	SecretsClient   SecretsClient
+	SecretsPrefix   string
+	PrivilegedRepos map[string]bool // repos allowed to use privileged: true
 }
 
 func (a *Activities) namespace() string {
@@ -128,6 +129,11 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 }
 
 func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunStepResult, error) {
+	// Enforce privileged allowlist
+	if input.Privileged && len(a.PrivilegedRepos) > 0 && !a.PrivilegedRepos[input.Repo] {
+		return RunStepResult{}, fmt.Errorf("repo %q is not allowed to use privileged mode", input.Repo)
+	}
+
 	metrics.PodsActive.Inc()
 	defer metrics.PodsActive.Dec()
 
@@ -169,6 +175,11 @@ func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunSte
 	}
 	if len(env) > 0 {
 		spec.Env = env
+	}
+
+	// Expand ${{ matrix.* }} template syntax in the command
+	if len(input.MatrixVars) > 0 {
+		spec.Command[2] = expandTemplateVars(spec.Command[2], input.MatrixVars)
 	}
 
 	// Service containers
@@ -379,6 +390,14 @@ func upsertPRComment(ctx context.Context, gh *github.Client, owner, repo string,
 
 // --- Helpers ---
 
+// expandTemplateVars replaces ${{ matrix.key }} with the corresponding value.
+func expandTemplateVars(s string, vars map[string]string) string {
+	for k, v := range vars {
+		s = strings.ReplaceAll(s, "${{ matrix."+k+" }}", v)
+	}
+	return s
+}
+
 // TruncateOutput keeps the last maxLen bytes with a truncation notice.
 func TruncateOutput(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -460,7 +479,7 @@ func convertStepConfig(s config.StepConfig) StepConfig {
 		}
 	}
 	if s.AWSRole != nil {
-		sc.AWSRole = &AWSRoleConfig{ARN: s.AWSRole.ARN, Duration: s.AWSRole.Duration, SessionName: s.AWSRole.SessionName}
+		sc.AWSRole = &AWSRoleConfig{ARN: s.AWSRole.ARN, Duration: s.AWSRole.Duration, SessionName: s.AWSRole.SessionName, SourceCredentials: s.AWSRole.SourceCredentials}
 	}
 	if s.Trigger != nil {
 		sc.Trigger = &TriggerStep{

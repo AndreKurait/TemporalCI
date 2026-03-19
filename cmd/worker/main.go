@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -64,6 +65,14 @@ func main() {
 		LogBucket:      cfg.LogBucket,
 		CINodePool:     os.Getenv("CI_NODE_POOL") == "true",
 		SecretsPrefix:  os.Getenv("SECRETS_PREFIX"),
+	}
+
+	// Privileged repo allowlist (comma-separated)
+	if repos := os.Getenv("PRIVILEGED_REPOS"); repos != "" {
+		acts.PrivilegedRepos = make(map[string]bool)
+		for _, r := range strings.Split(repos, ",") {
+			acts.PrivilegedRepos[strings.TrimSpace(r)] = true
+		}
 	}
 
 	// GitHub App authentication (preferred over PAT)

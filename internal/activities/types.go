@@ -109,9 +109,10 @@ type LockPoolRef struct {
 
 // AWSRoleConfig defines IAM role assumption for a step.
 type AWSRoleConfig struct {
-	ARN         string `json:"arn"`
-	Duration    int    `json:"duration,omitempty"`
-	SessionName string `json:"sessionName,omitempty"`
+	ARN              string `json:"arn"`
+	Duration         int    `json:"duration,omitempty"`
+	SessionName      string `json:"sessionName,omitempty"`
+	SourceCredentials string `json:"sourceCredentials,omitempty"` // step name to chain from
 }
 
 // TriggerStep triggers a child pipeline.
