@@ -40,7 +40,6 @@ export default defineConfig({
           items: [
             { label: 'EKS Deployment', slug: 'production/eks-deployment' },
             { label: 'OIDC Bootstrap', slug: 'production/oidc-bootstrap' },
-            { label: 'Auto Mode Migration', slug: 'production/automode-migration' },
           ],
         },
         {

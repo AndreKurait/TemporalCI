@@ -46,7 +46,7 @@ description: TemporalCI development roadmap and current status.
 
 **Goal**: EKS Auto Mode, RDS via ACK, production hardening.
 
-- Migrate to EKS Auto Mode
+- EKS Auto Mode (default for EKS deployments)
 - ACK for RDS and S3
 - ArgoCD EKS Capability
 - RBAC and network policies
