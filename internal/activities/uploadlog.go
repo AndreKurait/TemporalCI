@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
 // S3Uploader abstracts S3 operations for testing.
@@ -17,7 +18,7 @@ type S3Uploader interface {
 
 // S3Presigner abstracts S3 presign operations for testing.
 type S3Presigner interface {
-	PresignGetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*s3.PresignHTTPRequest, error)
+	PresignGetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
 }
 
 // UploadLogInput defines the input for the UploadLog activity.

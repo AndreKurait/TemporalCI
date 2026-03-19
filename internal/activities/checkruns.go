@@ -51,14 +51,15 @@ func (a *Activities) CreateCheckRuns(ctx context.Context, input CheckRunInput) e
 			text = truncateForCheckRun(step.Output, 60000)
 		}
 
+		status := "completed"
 		opts := github.CreateCheckRunOptions{
-			Name:       fmt.Sprintf("TemporalCI / %s", step.Name),
-			HeadSHA:    input.HeadSHA,
-			Status:     github.Ptr("completed"),
-			Conclusion: &conclusion,
+			Name:        fmt.Sprintf("TemporalCI / %s", step.Name),
+			HeadSHA:     input.HeadSHA,
+			Status:      &status,
+			Conclusion:  &conclusion,
 			CompletedAt: &github.Timestamp{Time: time.Now()},
 			Output: &github.CheckRunOutput{
-				Title:   github.Ptr(fmt.Sprintf("%s: %s", step.Name, step.Status)),
+				Title:   github.String(fmt.Sprintf("%s: %s", step.Name, step.Status)),
 				Summary: &summary,
 			},
 		}
