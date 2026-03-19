@@ -35,8 +35,6 @@ resource "aws_iam_role_policy" "argocd_capability" {
   })
 }
 
-data "aws_caller_identity" "current" {}
-
 resource "aws_eks_capability" "argocd" {
   cluster_name              = aws_eks_cluster.this.name
   capability_name           = "argocd"
