@@ -1,74 +1,53 @@
 # TemporalCI
 
-A Kubernetes-native CI system built on [Temporal](https://temporal.io/) for durable, scalable workflow orchestration. Runs on any K8s cluster — from local minikube to EKS Auto Mode in production.
+**The CI system that never loses your build.**
 
-[![CI](https://github.com/AndreKurait/TemporalCI/actions/workflows/ci.yml/badge.svg)](https://github.com/AndreKurait/TemporalCI/actions/workflows/ci.yml)
-[![Docker Build](https://github.com/AndreKurait/TemporalCI/actions/workflows/docker-build.yml/badge.svg)](https://github.com/AndreKurait/TemporalCI/actions/workflows/docker-build.yml)
+TemporalCI is a Kubernetes-native CI/CD platform built on [Temporal](https://temporal.io/) that treats every pipeline as a durable, observable, replayable workflow. Push code, get results — even if the infrastructure underneath crashes mid-build.
+
+[![Docker Build & Deploy](https://github.com/AndreKurait/TemporalCI/actions/workflows/docker-build.yml/badge.svg)](https://github.com/AndreKurait/TemporalCI/actions/workflows/docker-build.yml)
+[![Terraform Validate](https://github.com/AndreKurait/TemporalCI/actions/workflows/terraform-validate.yml/badge.svg)](https://github.com/AndreKurait/TemporalCI/actions/workflows/terraform-validate.yml)
 
 ---
 
-## Why TemporalCI?
+## The Problem
 
-Traditional CI systems (Jenkins, GitHub Actions runners) are stateless and fragile — a network blip kills your build, a timeout loses your progress, and debugging requires digging through opaque logs.
+Every CI system today has the same fundamental flaw: **pipelines are ephemeral processes.** A network blip kills your 45-minute build. A node eviction loses your test results. A timeout means starting over from scratch. And when something fails, you're left digging through opaque logs with no way to replay or inspect what happened.
 
-TemporalCI replaces that with **Temporal workflows** that are:
+Jenkins solved this with persistent state — but at the cost of a monolithic, plugin-hell architecture that's impossible to scale. GitHub Actions and GitLab CI went stateless — fast to set up, but fragile at scale. Neither can answer the question: *"What was the exact state of my pipeline 3 steps in when it failed?"*
 
-- **Durable** — workflows survive crashes and resume exactly where they left off
-- **Retryable** — failed activities retry automatically with configurable policies
-- **Observable** — every workflow execution is fully inspectable in the Temporal Web UI
-- **Scalable** — CI jobs run as isolated K8s pods, scaling with your cluster
+## The Insight
 
-## How It Works
+**Temporal already solved this problem for microservices.** Durable execution, automatic retries, workflow replay, full observability — these are table stakes in the Temporal ecosystem. TemporalCI applies the same primitives to CI/CD:
 
-```mermaid
-flowchart LR
-    GH["GitHub push/PR"] --> WH["Webhook Server"]
-    WH --> TS["Temporal Server"]
-    TS --> W["Worker"]
-    W --> WF["CIPipeline Workflow"]
-    WF --> C["1. CloneRepo"]
-    WF --> R["2. RunStep ×N"]
-    WF --> RP["3. ReportResults"]
-    R --> P["CI Job Pods\n(K8s)"]
-    RP --> CR["GitHub Check Run\n+ PR Comment"]
+| Traditional CI | TemporalCI |
+|---|---|
+| Pipeline dies on crash | Workflow resumes exactly where it left off |
+| Retry = start over | Retry = re-execute only the failed activity |
+| Logs disappear | Every execution is fully inspectable and replayable |
+| Opaque failure modes | Structured error handling with compensation logic |
+| Scaling = more runners | Scaling = more K8s pods, auto-provisioned |
+| Static infrastructure | Ephemeral EKS clusters, provisioned on demand |
+
+## What Makes This Different
+
+### 1. Durable Pipelines
+Your CI pipeline is a Temporal workflow. If the worker crashes mid-build, Temporal replays the workflow history and resumes from the last completed activity. No lost work. No re-running passed steps.
+
+### 2. Ephemeral Cluster Pool
+Need to test a Helm chart on a real Kubernetes cluster? TemporalCI maintains a **warm pool of EKS clusters** that are leased to pipelines on demand. Your chart gets installed, tested, and validated on an isolated cluster — then the cluster is released back to the pool. No shared state. No test pollution.
+
+```yaml
+steps:
+  - name: helm-test
+    helm_test:
+      chart_path: deploy/helm
+      release_name: my-app
+      namespace: test
+      timeout: 10m
 ```
 
-1. **Webhook server** receives GitHub `push` / `pull_request` events, validates signatures, and starts a Temporal workflow
-2. **CIPipeline workflow** clones the repo, runs each step as a K8s pod, and reports results
-3. **Results** appear as GitHub Check Runs with pass/fail annotations and a PR summary comment
-
----
-
-## Quick Start
-
-### Local Development (minikube)
-
-```bash
-# Start cluster
-minikube start
-
-# Install TemporalCI (includes Temporal server + PostgreSQL)
-helm install temporalci ./deploy/helm -f deploy/helm/values-local.yaml
-
-# Create secrets for GitHub integration
-kubectl create secret generic temporalci-secrets \
-  --from-literal=github-webhook-secret=dev-secret \
-  --from-literal=github-token=ghp_your_token_here
-
-# Access Temporal Web UI
-kubectl port-forward svc/temporalci-temporal-web 8088:8088
-# Open http://localhost:8088
-```
-
-### Production (EKS Auto Mode)
-
-See [Production Deployment Guide](docs/production.md).
-
----
-
-## Configuring Your Repo
-
-Add a `.temporalci.yaml` to the root of any repository to define its CI pipeline:
+### 3. DAG-Based Step Execution
+Steps declare dependencies. Independent steps run in parallel. Failed dependencies skip downstream steps. Each step runs in its own isolated K8s pod with its own image.
 
 ```yaml
 steps:
@@ -76,195 +55,163 @@ steps:
     image: golang:1.23
     command: go build ./...
 
-  - name: test
+  - name: unit-test
     image: golang:1.23
-    command: go test ./... -v
+    command: go test ./...
+    depends_on: [build]
 
   - name: lint
     image: golangci/golangci-lint:latest
     command: golangci-lint run
+    depends_on: [build]
+
+  - name: integration-test
+    image: golang:1.23
+    command: go test -tags=integration ./...
+    depends_on: [unit-test]
 ```
 
-Each step runs in its own isolated K8s pod. If no `.temporalci.yaml` is found, TemporalCI uses a default Go build + test pipeline.
+### 4. GitHub-Native Reporting
+Results appear directly on your PR — commit status, collapsible step logs, timing, and a link to the Temporal Web UI for deep inspection.
 
-### Step Configuration
+```
+## TemporalCI Results
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Display name for the step |
-| `image` | Yes | Docker image to run the step in |
-| `command` | Yes | Shell command to execute |
-| `timeout` | No | Step timeout (e.g., `5m`, `30m`) |
+✅ build (12.5s)
+✅ test (20.2s)
+✅ vet (16.1s)
 
----
+3 passed, 0 failed in 48.8s
 
-## Using the Reusable Workflow
-
-TemporalCI provides a GitHub Actions reusable workflow for repos that want CI without a full Temporal deployment:
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  ci:
-    uses: AndreKurait/TemporalCI/.github/workflows/reusable-ci.yml@main
-    with:
-      go-version: '1.23'          # optional, default: 1.23
-      build-command: 'go build ./...'  # optional
-      test-command: 'go test ./... -v -json'  # optional
+🔗 View workflow run
 ```
 
-This runs Build, Test, and Vet as parallel jobs with JUnit XML test reporting.
+### 5. Zero Stored Credentials
+GitHub Actions authenticates to AWS via OIDC federation. No access keys. No rotation. No secrets to leak. The IAM trust policy is scoped to a single GitHub repo.
 
 ---
 
 ## Architecture
 
-### Components
-
-| Component | Description | Code |
-|-----------|-------------|------|
-| **Webhook Server** | HTTP server that receives GitHub events and starts Temporal workflows | [`cmd/webhook/`](cmd/webhook/) |
-| **Worker** | Temporal worker that executes CI pipeline activities | [`cmd/worker/`](cmd/worker/) |
-| **CIPipeline Workflow** | Orchestrates clone → build → test → report | [`internal/workflows/`](internal/workflows/) |
-| **Activities** | CloneRepo, RunStep, ReportResults, UploadLog | [`internal/activities/`](internal/activities/) |
-| **K8s Pod Runner** | Creates and manages CI job pods | [`internal/k8s/`](internal/k8s/) |
-| **JUnit Parser** | Parses JUnit XML test results | [`internal/junit/`](internal/junit/) |
-| **Pipeline Config** | Loads `.temporalci.yaml` from repos | [`internal/config/`](internal/config/) |
-
-### Deployment Modes
-
-| | Local (minikube) | Production (EKS Auto Mode) |
-|---|---|---|
-| **Install** | `helm install` | Argo CD (EKS Capability) |
-| **Temporal DB** | PostgreSQL subchart | RDS via ACK |
-| **Secrets** | K8s Secrets | Secrets Store CSI → AWS Secrets Manager |
-| **CI Logs** | stdout | S3 + presigned URLs |
-| **Compute** | Single node | Auto Mode with system + ci-jobs NodePools |
-| **IAM** | N/A | EKS Pod Identity |
-
-### CI Pipeline Flow
-
-```mermaid
-flowchart TD
-    WF["CIPipeline Workflow"] --> Clone["CloneRepo\ngit clone --depth=1"]
-    Clone --> Step1["RunStep: build"]
-    Step1 --> Step2["RunStep: test"]
-    Step2 --> StepN["RunStep: ..."]
-    StepN --> Upload["UploadLog\nS3 + presigned URL"]
-    Upload --> Report["ReportResults\nGitHub Check Run + PR comment"]
-
-    subgraph "RunStep (K8s mode)"
-        K1["Create Pod on ci-jobs NodePool"] --> K2["Run command in Docker image"]
-        K2 --> K3["Stream logs via K8s API"]
-        K3 --> K4["Collect exit code + JUnit XML"]
-    end
-
-    subgraph "RunStep (local mode)"
-        L1["sh -c command"]
-    end
 ```
+GitHub webhook → Webhook Server → Temporal Server → Worker → K8s Pods
+                                                          → Cluster Pool (EKS)
+                                                          → S3 (logs)
+                                                          → GitHub API (results)
+```
+
+| Component | What It Does |
+|-----------|-------------|
+| **Webhook Server** | Validates GitHub signatures, starts Temporal workflows, serves admin dashboard |
+| **Worker** | Executes CI activities — clone, run steps as K8s pods, report results |
+| **CIPipeline** | Workflow: clone → run steps (DAG) → upload logs → report → cleanup |
+| **ClusterPool** | Long-running workflow: maintains warm EKS clusters, handles lease/release signals |
+| **HelmTestPipeline** | Workflow: lease cluster → clone → helm install → helm test → report → release |
+| **PodCleanup** | Scheduled workflow: garbage-collects stale CI pods every hour |
+
+### Key Design Decisions
+
+- **Temporal for orchestration** — not a custom state machine. Workflows are plain Go functions with full replay semantics.
+- **K8s pods for isolation** — each CI step runs in its own pod with its own image. No shared filesystem, no container reuse.
+- **EKS Auto Mode for compute** — nodes are provisioned on demand. No idle capacity. No node management.
+- **ArgoCD for deployment** — GitOps. Push to main → ECR → ArgoCD syncs → zero-downtime rollout.
+- **OIDC for auth** — GitHub Actions → AWS IAM. No stored credentials anywhere.
+
+---
+
+## Quick Start
+
+### 1. Configure Your Repo
+
+Add `.temporalci.yaml` to any repository:
+
+```yaml
+steps:
+  - name: build
+    image: golang:1.23
+    command: go build ./...
+    timeout: 5m
+
+  - name: test
+    image: golang:1.23
+    command: go test -v ./...
+    timeout: 5m
+    depends_on: [build]
+```
+
+### 2. Register the Webhook
+
+```bash
+# Via the API
+curl -X POST http://<webhook-url>/api/repos \
+  -H "Content-Type: application/json" \
+  -d '{"fullName": "owner/repo", "defaultBranch": "main"}'
+```
+
+### 3. Push Code
+
+Every push and PR triggers a pipeline. Results appear on the commit and PR within seconds of completion.
+
+---
+
+## Production Deployment
+
+TemporalCI runs on EKS with the following infrastructure (all managed via Terraform):
+
+- **EKS cluster** with Auto Mode (system + CI node pools)
+- **ECR** for container images
+- **S3** for CI build logs with presigned URLs
+- **RDS** for Temporal persistence (via ACK)
+- **IAM roles** with Pod Identity (least privilege per component)
+- **OIDC federation** for GitHub Actions (zero stored credentials)
+
+```bash
+cd deploy/terraform
+terraform init
+terraform apply
+```
+
+See [docs/github-oidc-bootstrap.md](docs/github-oidc-bootstrap.md) for the one-time OIDC setup.
 
 ---
 
 ## Project Structure
 
-| Path | Description |
-|------|-------------|
-| `cmd/worker/main.go` | Temporal worker entrypoint |
-| `cmd/webhook/main.go` | GitHub webhook HTTP server |
-| `internal/workflows/ci_pipeline.go` | CIPipeline workflow definition |
-| `internal/workflows/types.go` | Workflow input/output types |
-| `internal/activities/activities.go` | CloneRepo, RunStep, ReportResults |
-| `internal/activities/s3.go` | UploadLog (S3 + presigned URLs) |
-| `internal/activities/types.go` | Activity input/output types |
-| `internal/k8s/pod.go` | K8s pod create/watch/logs/cleanup |
-| `internal/junit/parser.go` | JUnit XML parser |
-| `internal/config/config.go` | App config from env vars |
-| `internal/config/pipeline.go` | `.temporalci.yaml` loader |
-| `deploy/helm/` | Umbrella Helm chart (Temporal + PostgreSQL subcharts) |
-| `deploy/terraform/` | EKS Auto Mode cluster bootstrap (IAM, ECR, add-ons) |
-| `docs/` | Architecture, production guide, pipeline config reference |
-| `.github/workflows/` | CI, Docker Build, Reusable CI, Terraform Validate/Apply |
-| `Dockerfile` | Multi-stage Go build |
-
----
-
-## Configuration
-
-### Environment Variables
-
-The worker and webhook server are configured via environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TEMPORAL_HOST_PORT` | `localhost:7233` | Temporal server address |
-| `PORT` | `8080` | Webhook server listen port |
-| `GITHUB_WEBHOOK_SECRET` | — | Secret for validating webhook signatures |
-| `LOG_BUCKET` | — | S3 bucket for CI build logs |
-| `AWS_REGION` | `us-east-1` | AWS region for S3/ECR operations |
-
-The webhook server also reads secrets from file mounts at `/etc/temporalci/` (for Kubernetes Secrets / Secrets Store CSI compatibility).
-
-### Helm Values
-
-See [`deploy/helm/values.yaml`](deploy/helm/values.yaml) for all configurable values. Key sections:
-
-- `image.*` — Container image settings
-- `worker.*` — Worker replica count and resources
-- `webhook.*` — Webhook server settings
-- `temporal.*` — Temporal server subchart config
-- `postgresql.*` — PostgreSQL subchart config
-- `secrets.*` — Secret management (local K8s Secrets or AWS Secrets Manager)
-- `rds.*` — RDS via ACK (production)
-- `s3.*` — S3 bucket via ACK (production)
-- `nodePool.*` — EKS NodePool configuration
-- `serviceAccounts.*` — IAM role ARNs for Pod Identity
-
----
-
-## Development
-
-```bash
-# Build all binaries
-make build
-
-# Run tests
-make test
-
-# Run linter
-make lint
-
-# Build Docker image locally
-docker build -t temporalci .
 ```
-
-### Running Locally Without K8s
-
-The worker and webhook can run locally without Kubernetes. When `K8sClient` is nil, `RunStep` falls back to executing commands directly via `sh -c`. You just need a running Temporal server:
-
-```bash
-# Start Temporal dev server (install: https://docs.temporal.io/cli)
-temporal server start-dev
-
-# In another terminal, start the worker
-TEMPORAL_HOST_PORT=localhost:7233 go run ./cmd/worker
-
-# In another terminal, start the webhook server
-TEMPORAL_HOST_PORT=localhost:7233 PORT=8080 go run ./cmd/webhook
+cmd/
+  worker/          Temporal worker entrypoint
+  webhook/         GitHub webhook HTTP server
+internal/
+  workflows/       CIPipeline, ClusterPool, HelmTestPipeline, PodCleanup, ApprovalGate
+  activities/      CloneRepo, RunStep, ReportResults, ProvisionCluster, RunHelmTest, ...
+  k8s/             Pod creation, log streaming, cleanup
+  config/          App config + .temporalci.yaml parser
+  ghapp/           GitHub App authentication
+  metrics/         Prometheus metrics (ci_pods_active, ci_step_status_total)
+deploy/
+  helm/            Umbrella Helm chart (Temporal + PostgreSQL subcharts)
+  terraform/       EKS, ECR, IAM, VPC, OIDC provider
+docs/              Architecture, production guide, OIDC bootstrap
 ```
 
 ---
 
-## GitHub Secrets
+## Why Temporal?
 
-See [docs/github-secrets.md](docs/github-secrets.md) for the full list of required GitHub Secrets.
+Temporal is an open-source durable execution platform. It guarantees that workflows run to completion, even across process restarts, infrastructure failures, and network partitions. For CI/CD, this means:
+
+- A 2-hour integration test suite **survives worker restarts** without re-running passed tests
+- A flaky `git clone` **retries automatically** with exponential backoff
+- A cancelled pipeline **runs cleanup logic** (delete pods, release clusters) even after cancellation
+- Every pipeline execution is **fully replayable** — you can inspect the exact sequence of activities, their inputs, outputs, and timing in the Temporal Web UI
+
+This isn't a wrapper around Temporal. The CI pipeline *is* a Temporal workflow. The cluster pool *is* a Temporal workflow. The approval gate *is* a Temporal signal. The entire system is ~3,000 lines of Go that leverages Temporal's guarantees instead of reimplementing them.
+
+---
+
+## Status
+
+**Live and running** on EKS in `us-east-1`. The [TemporalCI-test](https://github.com/AndreKurait/TemporalCI-test) repo has an active webhook — every push and PR triggers a real CI pipeline that clones, builds, tests, and reports results back to GitHub.
 
 ## License
 
