@@ -458,6 +458,7 @@ func parsePREvent(body []byte) ([]workflows.CIPipelineInput, error) {
 			Labels []struct {
 				Name string `json:"name"`
 			} `json:"labels"`
+			Merged bool `json:"merged"`
 		} `json:"pull_request"`
 		Repository struct {
 			FullName string `json:"full_name"`
@@ -466,7 +467,7 @@ func parsePREvent(body []byte) ([]workflows.CIPipelineInput, error) {
 	if err := json.Unmarshal(body, &pr); err != nil {
 		return nil, err
 	}
-	if pr.Action != "opened" && pr.Action != "synchronize" && pr.Action != "labeled" {
+	if pr.Action != "opened" && pr.Action != "synchronize" && pr.Action != "labeled" && pr.Action != "closed" {
 		return nil, nil
 	}
 
@@ -475,14 +476,21 @@ func parsePREvent(body []byte) ([]workflows.CIPipelineInput, error) {
 		labels = append(labels, l.Name)
 	}
 
+	params := map[string]string{"PR_ACTION": pr.Action}
+	if pr.Action == "closed" {
+		params["PR_MERGED"] = fmt.Sprintf("%v", pr.PullRequest.Merged)
+		params["PR_HEAD_BRANCH"] = pr.PullRequest.Head.Ref
+	}
+
 	return []workflows.CIPipelineInput{{
-		Event:    "pull_request",
-		Payload:  string(body),
-		Repo:     pr.Repository.FullName,
-		Ref:      pr.PullRequest.Head.Ref,
-		HeadSHA:  pr.PullRequest.Head.SHA,
-		PRNumber: pr.Number,
-		Labels:   labels,
+		Event:      "pull_request",
+		Payload:    string(body),
+		Repo:       pr.Repository.FullName,
+		Ref:        pr.PullRequest.Head.Ref,
+		HeadSHA:    pr.PullRequest.Head.SHA,
+		PRNumber:   pr.Number,
+		Labels:     labels,
+		Parameters: params,
 	}}, nil
 }
 
