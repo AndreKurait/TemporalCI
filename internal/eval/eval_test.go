@@ -156,3 +156,46 @@ func TestMatrixKey_Sorted(t *testing.T) {
 		t.Errorf("got %q, want a=1,b=2", key)
 	}
 }
+
+func TestEvaluate_CompoundCondition(t *testing.T) {
+	// opensearch-migrations pattern: event == 'push' || labels contains 'run-eks-tests'
+	env := map[string]string{"event": "pull_request", "labels": "run-eks-tests,ci"}
+	ok, err := Evaluate("event == 'push' || $labels contains 'run-eks-tests'", env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("expected true (labels match)")
+	}
+}
+
+func TestEvaluate_BranchCheck(t *testing.T) {
+	ok, err := Evaluate("branch == 'main'", map[string]string{"branch": "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("expected true")
+	}
+}
+
+func TestEvaluate_NegatedCondition(t *testing.T) {
+	ok, err := Evaluate("!(event == 'push')", map[string]string{"event": "pull_request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("expected true for negated condition")
+	}
+}
+
+func TestEvaluate_BackportBranch(t *testing.T) {
+	// delete-backport-branch pattern
+	ok, err := Evaluate("$branch startsWith 'backport/'", map[string]string{"branch": "backport/1.x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Error("expected true for backport branch")
+	}
+}
