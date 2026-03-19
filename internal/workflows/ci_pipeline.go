@@ -424,26 +424,6 @@ func depsOK(deps []string, completed map[string]bool) bool {
 	return true
 }
 
-func collectResult(ctx workflow.Context, f workflow.Future, name string, start time.Time, overallStatus string) (activities.StepResult, string) {
-	var r activities.RunStepResult
-	err := f.Get(ctx, &r)
-	duration := workflow.Now(ctx).Sub(start).Seconds()
-
-	status := "passed"
-	if temporal.IsCanceledError(err) {
-		status = "cancelled"
-		overallStatus = "cancelled"
-	} else if err != nil || r.ExitCode != 0 {
-		status = "failed"
-		overallStatus = "failed"
-	}
-
-	return activities.StepResult{
-		Name: name, Status: status, Output: r.Output,
-		ExitCode: r.ExitCode, Duration: duration, LogURL: r.LogURL,
-	}, overallStatus
-}
-
 func withStepOptions(ctx workflow.Context, timeout string) workflow.Context {
 	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: ParseTimeout(timeout, 10*time.Minute),
@@ -468,13 +448,6 @@ func withCloneOptions(ctx workflow.Context) workflow.Context {
 			BackoffCoefficient: 2.0,
 			MaximumInterval:   30 * time.Second,
 		},
-	})
-}
-
-func withUploadOptions(ctx workflow.Context) workflow.Context {
-	return workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 1 * time.Minute,
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 2},
 	})
 }
 
