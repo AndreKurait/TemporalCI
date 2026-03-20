@@ -347,19 +347,21 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		}
 	}
 
-	// Commit status
-	description := fmt.Sprintf("CI %s (%d steps)", state, len(input.Steps))
-	ciContext := "TemporalCI"
-	status := &github.RepoStatus{State: &state, Description: &description, Context: &ciContext}
-	if a.DashboardURL != "" && input.WorkflowID != "" {
-		targetURL := DashboardBuildURL(a.DashboardURL, input.WorkflowID)
-		status.TargetURL = &targetURL
-	} else if a.TemporalWebURL != "" && input.WorkflowID != "" {
-		targetURL := WorkflowURL(a.TemporalWebURL, input.WorkflowID)
-		status.TargetURL = &targetURL
-	}
-	if _, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, status); err != nil {
-		return fmt.Errorf("create commit status: %w", err)
+	// Commit status — only set for the main CI pipeline to avoid overwrites
+	if input.PipelineName == "" || input.PipelineName == "ci" || input.PipelineName == "default" {
+		description := fmt.Sprintf("CI %s (%d steps)", state, len(input.Steps))
+		ciContext := "TemporalCI"
+		status := &github.RepoStatus{State: &state, Description: &description, Context: &ciContext}
+		if a.DashboardURL != "" && input.WorkflowID != "" {
+			targetURL := DashboardBuildURL(a.DashboardURL, input.WorkflowID)
+			status.TargetURL = &targetURL
+		} else if a.TemporalWebURL != "" && input.WorkflowID != "" {
+			targetURL := WorkflowURL(a.TemporalWebURL, input.WorkflowID)
+			status.TargetURL = &targetURL
+		}
+		if _, _, err := gh.Repositories.CreateStatus(ctx, owner, repo, input.HeadSHA, status); err != nil {
+			return fmt.Errorf("create commit status: %w", err)
+		}
 	}
 
 	// PR comment
