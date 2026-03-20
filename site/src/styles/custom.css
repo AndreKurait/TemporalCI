@@ -202,41 +202,22 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
 /* ── Architecture flow ── */
 .arch-flow {
   display: flex; align-items: center; justify-content: center;
-  gap: 0; margin-bottom: 2rem; flex-wrap: wrap;
+  gap: 0; margin-bottom: 1.5rem;
 }
-.arch-flow-step { text-align: center; padding: 0 0.75rem; }
+.arch-flow-step { text-align: center; padding: 0 1rem; }
 .arch-flow-icon {
-  width: 3rem; height: 3rem; border-radius: 0.75rem;
+  width: 3.5rem; height: 3.5rem; border-radius: 0.75rem;
   background: var(--surface); border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center;
-  font-size: 1.125rem; color: var(--accent); margin: 0 auto 0.5rem;
+  font-size: 1.25rem; color: var(--accent); margin: 0 auto 0.5rem;
 }
-.arch-flow-label { font-size: 0.6875rem; color: var(--fg3); font-weight: 500; }
-.arch-flow-arrow { color: var(--fg3); font-size: 1.25rem; padding: 0 0.25rem; }
-
-/* ── Infrastructure grid with AWS icons ── */
-.arch-infra {
-  border: 1px solid var(--border); border-radius: 0.75rem;
-  padding: 1.25rem; background: var(--surface);
+.arch-flow-label { font-size: 0.75rem; color: var(--fg2); font-weight: 500; }
+.arch-flow-arrow { color: var(--fg3); font-size: 0.875rem; }
+.arch-note {
+  text-align: center; font-size: 0.8125rem; color: var(--fg3);
 }
-.arch-infra-title {
-  display: flex; align-items: center; gap: 0.5rem;
-  font-size: 0.8125rem; font-weight: 600; margin-bottom: 1rem;
-}
-.arch-infra-title img { width: 24px; height: 24px; }
-.arch-infra-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-.arch-infra-item {
-  display: flex; align-items: center; gap: 0.5rem;
-  font-size: 0.75rem; color: var(--fg2);
-}
-.arch-infra-item img { width: 20px; height: 20px; }
-.arch-infra-note {
-  font-size: 0.6875rem; color: var(--fg3); font-style: italic;
-  border-top: 1px solid var(--border); padding-top: 0.75rem;
-}
+.arch-note a { color: var(--accent); text-decoration: none; }
+.arch-note a:hover { text-decoration: underline; }
 
 /* ── Comparison table ── */
 .comparison-wrapper {
@@ -301,8 +282,9 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
   .pillar { text-align: left; display: flex; gap: 1rem; align-items: flex-start; }
   .pillar-icon { margin-bottom: 0; }
   .config-split { grid-template-columns: 1fr; }
-  .arch-infra-grid { grid-template-columns: repeat(2, 1fr); }
-  .landing-section { padding: 3rem 1rem; }
+  .arch-flow { flex-wrap: wrap; gap: 0.5rem; }
+  .arch-flow-step { padding: 0 0.5rem; }
+  .landing-section { padding: 2.5rem 1rem; }
   .footer-cta { padding: 3rem 1rem; }
 }
 @media (prefers-reduced-motion: reduce) {

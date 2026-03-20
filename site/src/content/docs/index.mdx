@@ -120,65 +120,34 @@ hero:
   </div>
 </section>
 
-{/* ── Architecture: clean visual with AWS icons ── */}
+{/* ── How it works: just the flow ── */}
 <section class="landing-section">
-  <div class="section-label">Architecture</div>
-  <h2 class="section-title">What happens when you push.</h2>
+  <div class="section-label">How it works</div>
+  <h2 class="section-title">Push code. Get results.</h2>
 
   <div class="arch-flow">
     <div class="arch-flow-step">
       <div class="arch-flow-icon"><i class="fa-brands fa-github"></i></div>
-      <div class="arch-flow-label">Push / PR</div>
+      <div class="arch-flow-label">git push</div>
     </div>
-    <div class="arch-flow-arrow">→</div>
+    <div class="arch-flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
     <div class="arch-flow-step">
       <div class="arch-flow-icon"><i class="fa-solid fa-bolt"></i></div>
-      <div class="arch-flow-label">Temporal Workflow</div>
+      <div class="arch-flow-label">Temporal workflow</div>
     </div>
-    <div class="arch-flow-arrow">→</div>
+    <div class="arch-flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
     <div class="arch-flow-step">
       <div class="arch-flow-icon"><i class="fa-brands fa-docker"></i></div>
-      <div class="arch-flow-label">K8s Pods</div>
+      <div class="arch-flow-label">K8s pods</div>
     </div>
-    <div class="arch-flow-arrow">→</div>
+    <div class="arch-flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
     <div class="arch-flow-step">
       <div class="arch-flow-icon"><i class="fa-solid fa-circle-check"></i></div>
-      <div class="arch-flow-label">PR Results</div>
+      <div class="arch-flow-label">PR status</div>
     </div>
   </div>
 
-  <div class="arch-infra">
-    <div class="arch-infra-title">
-      <img src="/TemporalCI/icons/aws/eks.svg" alt="" /> Runs on EKS Auto Mode
-    </div>
-    <div class="arch-infra-grid">
-      <div class="arch-infra-item">
-        <img src="/TemporalCI/icons/aws/rds.svg" alt="" />
-        <span>RDS PostgreSQL</span>
-      </div>
-      <div class="arch-infra-item">
-        <img src="/TemporalCI/icons/aws/cloudwatch.svg" alt="" />
-        <span>CloudWatch</span>
-      </div>
-      <div class="arch-infra-item">
-        <img src="/TemporalCI/icons/aws/secrets-manager.svg" alt="" />
-        <span>Secrets Manager</span>
-      </div>
-      <div class="arch-infra-item">
-        <img src="/TemporalCI/icons/aws/ecr.svg" alt="" />
-        <span>ECR</span>
-      </div>
-      <div class="arch-infra-item">
-        <img src="/TemporalCI/icons/aws/s3.svg" alt="" />
-        <span>S3 Logs</span>
-      </div>
-      <div class="arch-infra-item">
-        <img src="/TemporalCI/icons/aws/vpc.svg" alt="" />
-        <span>VPC CNI</span>
-      </div>
-    </div>
-    <div class="arch-infra-note">Same Helm chart runs on minikube with zero AWS dependencies.</div>
-  </div>
+  <div class="arch-note">Runs on any Kubernetes cluster — EKS, GKE, or minikube. <a href="/TemporalCI/architecture/overview/">See full architecture →</a></div>
 </section>
 
 {/* ── Comparison: tight, scannable ── */}
