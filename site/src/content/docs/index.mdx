@@ -126,8 +126,7 @@ hero:
   <h2 class="section-title">Push code. Get results.</h2>
 
   <div class="mermaid-wrapper">
-    <pre class="mermaid">
-{`architecture-beta
+    <pre class="mermaid" set:html={`architecture-beta
     group eks(logos:aws-eks)[EKS Cluster]
 
     service github(logos:github-icon)[GitHub] outside
@@ -143,8 +142,7 @@ hero:
     temporal:R --> L:worker
     worker:B --> T:pods
     temporal:B --> T:rds
-    worker:R --> L:s3`}
-    </pre>
+    worker:R --> L:s3`} />
   </div>
 
   <div class="arch-note">Runs on any Kubernetes cluster — EKS, GKE, or minikube. <a href="/TemporalCI/architecture/overview/">See full architecture →</a></div>
