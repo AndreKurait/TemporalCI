@@ -35,6 +35,11 @@ data:
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
+
+          # Rewrite nested _app paths from relative CSS/JS references
+          sub_filter_once off;
+          sub_filter_types text/html;
+          sub_filter './_app/' '/ci/_app/';
         }
 
         # CI API
