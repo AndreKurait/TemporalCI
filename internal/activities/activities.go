@@ -191,9 +191,10 @@ func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunSte
 		spec.Env = env
 	}
 
-	// Expand ${{ matrix.* }} template syntax in the command
+	// Expand ${{ matrix.* }} template syntax in the command and image
 	if len(input.MatrixVars) > 0 {
 		spec.Command[2] = expandTemplateVars(spec.Command[2], input.MatrixVars)
+		spec.Image = expandTemplateVars(spec.Image, input.MatrixVars)
 	}
 
 	// Service containers
