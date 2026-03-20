@@ -130,6 +130,12 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		// Enrich with repo-specific config
 		if repo, ok := repoStore.Get(r.Context(), input.Repo); ok {
 			input.SlackWebhookURL = repo.NotifySlack
+		} else {
+			// Auto-register repo on first webhook
+			_ = repoStore.Register(r.Context(), &store.Repo{
+				FullName:      input.Repo,
+				DefaultBranch: "main",
+			})
 		}
 		if secretsPrefix != "" {
 			input.SecretsPrefix = secretsPrefix
