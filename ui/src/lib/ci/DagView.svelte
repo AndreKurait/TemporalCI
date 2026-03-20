@@ -78,8 +78,7 @@
 			{/each}
 			{#each l.nodes as node}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-				<g onclick={() => onNodeClick(node.name)} style="cursor:pointer">
+				<g role="button" tabindex="0" onclick={() => onNodeClick(node.name)} style="cursor:pointer">
 					<rect
 						x={node.x} y={node.y}
 						width={node.w} height={node.h}

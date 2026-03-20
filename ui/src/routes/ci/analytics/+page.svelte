@@ -78,16 +78,16 @@
 			<div class="card stat">
 				<div class="label">Avg Duration</div>
 				<div class="value">{formatDuration(analytics.avgDuration)}</div>
-				{#if analytics.durationTrend?.length}
-					<div class="trend">
-						{@const last = analytics.durationTrend.at(-1)?.duration}
-						{@const prev = analytics.durationTrend.at(-2)?.duration}
-						{#if last && prev}
+				{#if analytics.durationTrend?.length >= 2}
+					{@const last = analytics.durationTrend.at(-1)?.duration}
+					{@const prev = analytics.durationTrend.at(-2)?.duration}
+					{#if last && prev}
+						<div class="trend">
 							<span style="color: {last > prev ? 'var(--error)' : 'var(--success)'}">
 								{last > prev ? '↑' : '↓'} {Math.abs(Math.round((last - prev) / prev * 100))}%
 							</span>
-						{/if}
-					</div>
+						</div>
+					{/if}
 				{/if}
 			</div>
 		</div>
