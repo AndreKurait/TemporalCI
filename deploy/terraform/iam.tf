@@ -298,7 +298,7 @@ resource "aws_iam_role_policy" "github_actions" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
         ]
-        Resource = aws_ecr_repository.temporalci.arn
+        Resource = [aws_ecr_repository.temporalci.arn, "arn:aws:ecr:us-east-1:<ACCOUNT_ID>:repository/temporalci-dashboard"]
       },
     ]
   })
