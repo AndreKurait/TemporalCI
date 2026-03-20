@@ -23,7 +23,7 @@
 		<a href="/ci/repos">Repos</a>
 		<a href="/ci/triggers">Triggers</a>
 		<a href="/ci/analytics">Analytics</a>
-		<a href="/workflows" class="external">Temporal UI ↗</a>
+		<a href="/namespaces/default/workflows" class="external">Temporal UI ↗</a>
 	</div>
 	<div class="right">
 		<a href="/ci/builds" class="bell" title="Notifications">
