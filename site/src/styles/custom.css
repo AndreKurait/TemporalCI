@@ -70,20 +70,20 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
 
 /* ── Hero ── */
 .hero-section {
-  min-height: 80vh; display: flex; flex-direction: column;
+  display: flex; flex-direction: column;
   align-items: center; justify-content: center; text-align: center;
-  padding: 2rem 1.5rem; position: relative; overflow: hidden;
+  padding: 4rem 1.5rem 3rem; position: relative; overflow: hidden;
 }
 .hero-section::before {
-  content: ''; position: absolute; top: -40%; left: 50%; transform: translateX(-50%);
-  width: 800px; height: 800px;
-  background: radial-gradient(circle, rgba(109,91,247,0.12) 0%, transparent 70%);
+  content: ''; position: absolute; top: -50%; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(109,91,247,0.1) 0%, transparent 70%);
   pointer-events: none;
 }
 .hero-title {
-  font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 700;
   line-height: 1.1; letter-spacing: -0.03em;
-  margin: 0 0 1.25rem; max-width: 700px; position: relative; z-index: 1;
+  margin: 0 0 1rem; max-width: 600px; position: relative; z-index: 1;
 }
 .hero-title .accent {
   background: linear-gradient(135deg, #6d5bf7, #a78bfa);
@@ -91,13 +91,13 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
   -webkit-text-fill-color: transparent;
 }
 .hero-subtitle {
-  font-size: clamp(1rem, 2vw, 1.125rem); color: var(--fg2);
-  max-width: 540px; margin: 0 0 2rem; line-height: 1.7;
+  font-size: clamp(0.9375rem, 1.5vw, 1.0625rem); color: var(--fg2);
+  max-width: 500px; margin: 0 0 1.5rem; line-height: 1.6;
   position: relative; z-index: 1;
 }
 .hero-actions {
   display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;
-  margin-bottom: 2.5rem; position: relative; z-index: 1;
+  margin-bottom: 2rem; position: relative; z-index: 1;
 }
 
 /* ── Buttons ── */
@@ -164,7 +164,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
 
 /* ── Sections ── */
 .landing-section {
-  padding: 4rem 1.5rem; max-width: 1000px; margin: 0 auto;
+  padding: 3rem 1.5rem; max-width: 1000px; margin: 0 auto;
 }
 .section-label {
   font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
@@ -293,7 +293,7 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .landing-nav-links a:not(.gh-link) { display: none; }
-  .hero-section { min-height: auto; padding: 3rem 1rem 2rem; }
+  .hero-section { padding: 2.5rem 1rem 2rem; }
   .hero-actions { flex-direction: column; align-items: center; }
   .hero-actions a { width: 100%; max-width: 260px; justify-content: center; }
   .terminal { max-width: 100%; }
