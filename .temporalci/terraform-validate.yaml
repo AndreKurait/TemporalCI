@@ -1,0 +1,18 @@
+# Terraform validation — replaces terraform-validate.yml
+on:
+  push:
+    branches: [main]
+    paths: ["deploy/terraform/**"]
+  pull_request:
+    branches: [main]
+    paths: ["deploy/terraform/**"]
+
+steps:
+  - name: terraform-validate
+    image: hashicorp/terraform:1.9
+    commands:
+      - cd deploy/terraform
+      - terraform init -backend=false
+      - terraform validate
+      - terraform fmt -check -recursive
+    timeout: 5m

@@ -1,0 +1,30 @@
+# Deploy site to GitHub Pages — replaces deploy-site.yml
+on:
+  push:
+    branches: [main]
+    paths: ["site/**"]
+
+steps:
+  - name: build-site
+    image: node:22
+    commands:
+      - cd site && npm ci && npm run build
+    artifacts:
+      upload:
+        - path: site/dist
+    timeout: 10m
+
+  - name: deploy-pages
+    depends_on: [build-site]
+    image: alpine:latest
+    command: |
+      # Upload to GitHub Pages via API
+      cd site/dist
+      tar czf /tmp/pages.tar.gz .
+      curl -sS -X POST \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Content-Type: application/gzip" \
+        --data-binary @/tmp/pages.tar.gz \
+        "https://api.github.com/repos/$TEMPORALCI_REPO/pages/deployments"
+    secrets: [GITHUB_TOKEN]
+    timeout: 5m

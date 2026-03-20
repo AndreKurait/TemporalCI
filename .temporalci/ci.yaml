@@ -1,15 +1,9 @@
-# TemporalCI self-hosting pipeline — dogfooding
+# TemporalCI self-hosting pipeline — replaces docker-build.yml + original CI
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-
-parameters:
-  - name: DEPLOY
-    type: boolean
-    default: "false"
-    description: "Deploy after build (only on main push)"
 
 steps:
   - name: test
@@ -33,32 +27,52 @@ steps:
         - path: /artifacts/worker
         - path: /artifacts/validate
 
-  - name: docker-build
-    depends_on: [build]
+  - name: dashboard-build
+    image: node:22
+    commands:
+      - cd ui && npm ci && npm run build
+    timeout: 10m
+
+  - name: docker-push
+    depends_on: [build, dashboard-build]
+    when: "event == 'push'"
     docker: true
     image: docker:27
     commands:
-      - docker build -t temporalci/temporalci:$TEMPORALCI_SHA .
-      - docker push temporalci/temporalci:$TEMPORALCI_SHA
+      - docker build -t $ECR_REGISTRY/temporalci:$TEMPORALCI_SHA -t $ECR_REGISTRY/temporalci:latest .
+      - docker push $ECR_REGISTRY/temporalci:$TEMPORALCI_SHA
+      - docker push $ECR_REGISTRY/temporalci:latest
+      - docker build -t $ECR_REGISTRY/temporalci-dashboard:$TEMPORALCI_SHA -t $ECR_REGISTRY/temporalci-dashboard:latest ./ui
+      - docker push $ECR_REGISTRY/temporalci-dashboard:$TEMPORALCI_SHA
+      - docker push $ECR_REGISTRY/temporalci-dashboard:latest
     secrets: [ECR_REGISTRY]
+    aws_role:
+      role_arn_secret: AWS_ROLE_ARN
     timeout: 15m
 
-  - name: deploy
-    depends_on: [docker-build]
-    when: "$DEPLOY == 'true'"
-    image: alpine/helm:latest
-    commands:
-      - helm upgrade temporalci ./deploy/helm --set image.tag=$TEMPORALCI_SHA
-    secrets: [KUBE_TOKEN]
+  - name: gitops-tag
+    depends_on: [docker-push]
+    when: "event == 'push'"
+    image: alpine/git:latest
+    command: |
+      SHORT_SHA="${TEMPORALCI_SHA:0:7}"
+      sed -i "s/^  tag: .*/  tag: ${TEMPORALCI_SHA}/" deploy/helm/values-eks.yaml
+      git config user.name "temporalci[bot]"
+      git config user.email "temporalci[bot]@users.noreply.github.com"
+      git add deploy/helm/values-eks.yaml
+      git diff --cached --quiet && echo "No tag change" && exit 0
+      git commit -m "deploy: update image tag to ${SHORT_SHA} [skip ci]"
+      git push
+    secrets: [GITHUB_TOKEN]
     timeout: 5m
 
   - name: all-checks
     type: gate
-    depends_on: [test, build, docker-build]
+    depends_on: [test, build, dashboard-build]
 
 post:
   on_failure:
     - name: notify
       command: |
-        curl -X POST $SLACK_WEBHOOK -d '{"text":"TemporalCI CI failed on '$branch'"}'
+        curl -X POST $SLACK_WEBHOOK -d '{"text":"TemporalCI CI failed on '$TEMPORALCI_REF'"}'
       secrets: [SLACK_WEBHOOK]

@@ -4,8 +4,7 @@
 
 TemporalCI is a Kubernetes-native CI/CD platform built on [Temporal](https://temporal.io/) that treats every pipeline as a durable, observable, replayable workflow. Push code, get results — even if the infrastructure underneath crashes mid-build.
 
-[![Docker Build & Deploy](https://github.com/AndreKurait/TemporalCI/actions/workflows/docker-build.yml/badge.svg)](https://github.com/AndreKurait/TemporalCI/actions/workflows/docker-build.yml)
-[![Terraform Validate](https://github.com/AndreKurait/TemporalCI/actions/workflows/terraform-validate.yml/badge.svg)](https://github.com/AndreKurait/TemporalCI/actions/workflows/terraform-validate.yml)
+![Build](https://your-temporalci-host/badge/AndreKurait/TemporalCI)
 
 ---
 

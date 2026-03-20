@@ -1,0 +1,38 @@
+# Terraform apply — replaces terraform-apply.yml (manual trigger only)
+on:
+  webhook: true
+
+parameters:
+  - name: ACTION
+    type: choice
+    default: plan
+    options: [plan, apply, destroy]
+    description: "Terraform action"
+  - name: IMPORT_ECR
+    type: boolean
+    default: "false"
+    description: "Import existing ECR repo (first run only)"
+
+steps:
+  - name: terraform
+    image: hashicorp/terraform:1.9
+    aws_role:
+      role_arn_secret: AWS_ROLE_ARN
+    commands:
+      - cd deploy/terraform
+      - terraform init
+      - |
+        if [ "$IMPORT_ECR" = "true" ]; then
+          terraform import aws_ecr_repository.temporalci temporalci || true
+        fi
+      - |
+        if [ "$ACTION" = "destroy" ]; then
+          terraform destroy -auto-approve
+        else
+          terraform plan -out=tfplan
+          if [ "$ACTION" = "apply" ]; then
+            terraform apply -auto-approve tfplan
+          fi
+        fi
+    secrets: [AWS_ROLE_ARN]
+    timeout: 30m
