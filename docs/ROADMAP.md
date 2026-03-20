@@ -65,8 +65,10 @@
 
 ## Remaining
 
-- [ ] Matrix builds — run steps across multiple versions (Go 1.22/1.23, Node 18/20)
-- [ ] Monorepo support — detect changed paths, only run affected pipelines
-- [ ] Build badges — SVG badge endpoint per repo/branch
-- [ ] Webhook replay — re-trigger past CI runs from dashboard
-- [ ] Self-hosting — TemporalCI builds and deploys itself on every push
+All items complete.
+
+- [x] Matrix builds — `matrix` field on steps/pipelines, cartesian product, exclude/include, child workflows, `${{ matrix.* }}` templates
+- [x] Monorepo support — `paths` filter on `push`/`pull_request` triggers, changed file extraction from webhook payload, `MatchesChangedPaths` with glob patterns
+- [x] Build badges — `GET /badge/{owner}/{repo}/{branch}` SVG endpoint, queries Temporal workflow status
+- [x] Webhook replay — `POST /api/replay/{workflowID}` re-triggers with original input
+- [x] Self-hosting — `.temporalci.yaml` in project root: test → build → docker → deploy → gate

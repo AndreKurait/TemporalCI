@@ -1,11 +1,12 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
 func TestParsePushEvent_Branch(t *testing.T) {
-	body := `{"ref":"refs/heads/main","after":"abc123","repository":{"full_name":"owner/repo"}}`
+	body := `{"ref":"refs/heads/main","after":"abc123","repository":{"full_name":"owner/repo"},"commits":[{"added":["src/new.go"],"modified":["src/main.go"],"removed":["old.txt"]}]}`
 	inputs, err := parseEvent("push", []byte(body))
 	if err != nil {
 		t.Fatal(err)
@@ -18,6 +19,9 @@ func TestParsePushEvent_Branch(t *testing.T) {
 	}
 	if inputs[0].Repo != "owner/repo" {
 		t.Errorf("repo = %q", inputs[0].Repo)
+	}
+	if len(inputs[0].ChangedFiles) != 3 {
+		t.Errorf("expected 3 changed files, got %d: %v", len(inputs[0].ChangedFiles), inputs[0].ChangedFiles)
 	}
 }
 
@@ -143,5 +147,28 @@ func TestVerifySignature_Valid(t *testing.T) {
 	result := verifySignature(payload, "sha256=0000000000000000000000000000000000000000000000000000000000000000", secret)
 	if result {
 		t.Error("should reject wrong signature")
+	}
+}
+
+func TestBadgeSVG(t *testing.T) {
+	svg := badgeSVG("build", "passing", "#4c1")
+	if !strings.Contains(svg, "<svg") {
+		t.Error("should be valid SVG")
+	}
+	if !strings.Contains(svg, "passing") {
+		t.Error("should contain status text")
+	}
+	if !strings.Contains(svg, "build") {
+		t.Error("should contain label text")
+	}
+	if !strings.Contains(svg, "#4c1") {
+		t.Error("should contain color")
+	}
+}
+
+func TestBadgeSVG_Failing(t *testing.T) {
+	svg := badgeSVG("build", "failing", "#e05d44")
+	if !strings.Contains(svg, "failing") {
+		t.Error("should contain failing status")
 	}
 }

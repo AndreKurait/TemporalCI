@@ -16,6 +16,7 @@ type CIPipelineInput struct {
 	PipelineName    string            `json:"pipelineName,omitempty"`
 	Parameters      map[string]string `json:"parameters,omitempty"`
 	Labels          []string          `json:"labels,omitempty"`
+	ChangedFiles    []string          `json:"changedFiles,omitempty"`
 }
 
 // CIPipelineResult defines the output of a CI pipeline workflow.

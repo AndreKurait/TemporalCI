@@ -13,29 +13,25 @@ hero:
 
 <a href="#main-content" class="skip-to-content">Skip to content</a>
 
-{/* ── Navigation ── */}
 <nav class="landing-nav" aria-label="Main navigation">
   <a href="/TemporalCI/" class="landing-nav-logo"><i class="fa-solid fa-bolt"></i> TemporalCI</a>
   <div class="landing-nav-links">
     <a href="/TemporalCI/getting-started/quickstart/">Docs</a>
     <a href="/TemporalCI/architecture/overview/">Architecture</a>
-    <a href="/TemporalCI/roadmap/">Roadmap</a>
     <a href="/TemporalCI/blog/">Blog</a>
     <a href="https://github.com/AndreKurait/TemporalCI" class="gh-link"><i class="fa-brands fa-github"></i> GitHub</a>
   </div>
 </nav>
 
-{/* ── Hero ── */}
+{/* ── Hero: one clear message ── */}
 <section class="hero-section" id="main-content">
-  <div class="hero-badge"><i class="fa-solid fa-rocket"></i> Open source — <a href="https://github.com/AndreKurait/TemporalCI">Star on GitHub</a></div>
-
   <h1 class="hero-title" set:html="CI pipelines that<br /><span class='accent'>never lose your work.</span>" />
 
-  <div class="hero-subtitle">Kubernetes-native CI built on Temporal. Durable workflows that survive crashes, isolated pod execution, and a single Helm chart from minikube to EKS.</div>
+  <div class="hero-subtitle">Built on Temporal. Every pipeline is a durable workflow — retryable, observable, and resilient to infrastructure failures. Runs on any Kubernetes cluster.</div>
 
   <div class="hero-actions">
     <a href="/TemporalCI/getting-started/quickstart/" class="btn-primary">Get Started →</a>
-    <a href="https://github.com/AndreKurait/TemporalCI" class="btn-secondary">View on GitHub</a>
+    <a href="https://github.com/AndreKurait/TemporalCI" class="btn-secondary"><i class="fa-brands fa-github"></i> View Source</a>
   </div>
 
   <div class="terminal">
@@ -46,60 +42,57 @@ hero:
     </div>
     <div class="terminal-body">
       <div class="line"><span class="prompt">$</span> <span class="cmd">helm install temporalci ./deploy/helm -f values-local.yaml</span></div>
-      <div class="line"><span class="muted">NAME: temporalci</span></div>
-      <div class="line"><span class="muted">STATUS: deployed</span></div>
+      <div class="line"><span class="muted">NAME: temporalci — STATUS: deployed</span></div>
       <div class="line">&nbsp;</div>
       <div class="line"><span class="success">✓</span> Temporal server ........... <span class="success">ready</span></div>
       <div class="line"><span class="success">✓</span> TemporalCI worker ......... <span class="success">ready</span></div>
       <div class="line"><span class="success">✓</span> Webhook server ............ <span class="success">ready</span></div>
-      <div class="line">&nbsp;</div>
-      <div class="line"><span class="cmd">TemporalCI is running 🚀</span></div>
     </div>
   </div>
 </section>
 
-<hr class="section-divider" />
-
-{/* ── The Problem ── */}
-<section class="landing-section">
-  <div class="section-label">The Problem</div>
-  <h2 class="section-title">Your CI pipeline is a house of cards.</h2>
-  <div class="section-subtitle">Every CI system treats pipelines as ephemeral processes. When something goes wrong, you start over.</div>
-
-  <div class="pain-grid">
-    <div class="pain-card">
-      <div class="pain-label">The pain</div>
-      <h3>Your Jenkins server crashed at 2am. Again.</h3>
-      <div class="pain-text">45-minute build, gone. No state saved. No way to resume. Just start over and hope.</div>
-      <div class="fix-label">TemporalCI</div>
-      <div class="pain-text">Temporal workflows survive node failures. Your pipeline resumes from the last completed step.</div>
+{/* ── The pitch: 3 pillars, not 9 feature cards ── */}
+<section class="landing-section pillars-section">
+  <div class="pillars">
+    <div class="pillar">
+      <div class="pillar-icon"><i class="fa-solid fa-shield-halved"></i></div>
+      <h3>Durable</h3>
+      <div class="pillar-text">Node crashes mid-build? Temporal replays the workflow and resumes from the last completed step. Not from scratch.</div>
     </div>
-    <div class="pain-card">
-      <div class="pain-label">The pain</div>
-      <h3>500 lines of YAML to build a Go binary.</h3>
-      <div class="pain-text">Nested conditionals, matrix strategies, reusable workflows that aren't reusable. YAML was never meant for this.</div>
-      <div class="fix-label">TemporalCI</div>
-      <div class="pain-text">12 lines of <code>.temporalci.yaml</code>. Flat, readable, no DSL to learn.</div>
+    <div class="pillar">
+      <div class="pillar-icon"><i class="fa-brands fa-docker"></i></div>
+      <h3>Isolated</h3>
+      <div class="pillar-text">Every CI step runs in its own K8s pod. Resource limits, dedicated node pool, network isolation. No shared runners.</div>
     </div>
-    <div class="pain-card">
-      <div class="pain-label">The pain</div>
-      <h3>Debugging means clicking through 47 collapsed log groups.</h3>
-      <div class="pain-text">Something failed. Where? Which step? Which line? Good luck finding it in the GitHub Actions log viewer.</div>
-      <div class="fix-label">TemporalCI</div>
-      <div class="pain-text">Full pod logs on your PR. Presigned S3 links for complete output. Temporal Web UI for workflow inspection.</div>
+    <div class="pillar">
+      <div class="pillar-icon"><i class="fa-solid fa-cube"></i></div>
+      <h3>Simple</h3>
+      <div class="pillar-text">One Helm chart. Same config on minikube and EKS Auto Mode. 12 lines of YAML to define your pipeline.</div>
     </div>
   </div>
 </section>
 
-<hr class="section-divider" />
-
-{/* ── Config Showcase ── */}
+{/* ── The config: show don't tell ── */}
 <section class="landing-section">
-  <div class="section-label">Simple by design</div>
-  <h2 class="section-title">Your entire CI config. That's it.</h2>
-  <div class="section-subtitle">No DSL. No plugins. Just declare your steps and let Temporal handle the rest.</div>
-
-  <div class="config-showcase">
+  <div class="config-split">
+    <div class="config-left">
+      <div class="section-label">Your entire pipeline</div>
+      <h2 class="section-title">.temporalci.yaml</h2>
+      <div class="config-points">
+        <div class="config-point">
+          <i class="fa-solid fa-arrows-split-up-and-left"></i>
+          <div>Steps without <code>depends_on</code> run in parallel automatically</div>
+        </div>
+        <div class="config-point">
+          <i class="fa-solid fa-clock"></i>
+          <div>Temporal enforces timeouts — no zombie builds</div>
+        </div>
+        <div class="config-point">
+          <i class="fa-solid fa-box"></i>
+          <div>Each step gets its own pod, image, and resource limits</div>
+        </div>
+      </div>
+    </div>
     <div class="terminal config-terminal">
       <div class="terminal-header">
         <span class="terminal-dot red"></span>
@@ -108,7 +101,6 @@ hero:
         <span class="terminal-filename">.temporalci.yaml</span>
       </div>
       <div class="terminal-body">
-        <div><span class="muted"># Your entire CI pipeline</span></div>
         <div><span class="cmd">steps:</span></div>
         <div>  <span class="cmd">- name:</span> <span class="val-purple">test</span></div>
         <div>    <span class="cmd">image:</span> golang:1.23</div>
@@ -117,207 +109,82 @@ hero:
         <div>&nbsp;</div>
         <div>  <span class="cmd">- name:</span> <span class="val-purple">build</span></div>
         <div>    <span class="cmd">image:</span> golang:1.23</div>
-        <div>    <span class="cmd">command:</span> go build -o /artifacts/app ./cmd/server</div>
+        <div>    <span class="cmd">command:</span> go build ./cmd/server</div>
         <div>    <span class="cmd">depends_on:</span> <span class="val-green">[test]</span></div>
         <div>&nbsp;</div>
         <div>  <span class="cmd">- name:</span> <span class="val-purple">lint</span></div>
-        <div>    <span class="cmd">image:</span> golangci/golangci-lint:latest</div>
+        <div>    <span class="cmd">image:</span> golangci/golangci-lint</div>
         <div>    <span class="cmd">command:</span> golangci-lint run</div>
-        <div>    <span class="muted"># No depends_on → runs in parallel with test</span></div>
-      </div>
-    </div>
-
-    <div class="config-annotations">
-      <div class="annotation">
-        <h4>timeout: 10m</h4>
-        <div class="annotation-text">Temporal enforces this at the workflow level. No zombie builds. No runaway processes eating your cluster.</div>
-      </div>
-      <div class="annotation">
-        <h4>depends_on: [test]</h4>
-        <div class="annotation-text">DAG execution. Steps without dependencies run in parallel automatically. Failed deps skip downstream steps.</div>
-      </div>
-      <div class="annotation">
-        <h4>image: golang:1.23</h4>
-        <div class="annotation-text">Each step runs in its own isolated K8s pod. Proper resource limits, dedicated node pool, automatic cleanup.</div>
-      </div>
-      <div class="annotation">
-        <h4>That's the whole file.</h4>
-        <div class="annotation-text">No Groovy DSL. No nested YAML matrices. No reusable workflow indirection. Just steps.</div>
       </div>
     </div>
   </div>
 </section>
 
-<hr class="section-divider" />
-
-{/* ── How It Works ── */}
+{/* ── Architecture: clean visual with AWS icons ── */}
 <section class="landing-section">
-  <div class="section-label">Under the hood</div>
-  <h2 class="section-title">From git push to PR results.</h2>
-  <div class="section-subtitle">Every push triggers a durable Temporal workflow that orchestrates isolated K8s pods.</div>
+  <div class="section-label">Architecture</div>
+  <h2 class="section-title">What happens when you push.</h2>
 
-  <div class="flow-steps">
-    <div class="flow-step">
-      <div class="flow-icon"><i class="fa-solid fa-code-commit"></i></div>
-      <h4>git push</h4>
-      <div class="flow-desc">Push code or open a PR</div>
+  <div class="arch-flow">
+    <div class="arch-flow-step">
+      <div class="arch-flow-icon"><i class="fa-brands fa-github"></i></div>
+      <div class="arch-flow-label">Push / PR</div>
     </div>
-    <div class="flow-step">
-      <div class="flow-icon"><i class="fa-solid fa-bell"></i></div>
-      <h4>Webhook</h4>
-      <div class="flow-desc">GitHub sends event, signature validated</div>
+    <div class="arch-flow-arrow">→</div>
+    <div class="arch-flow-step">
+      <div class="arch-flow-icon"><i class="fa-solid fa-bolt"></i></div>
+      <div class="arch-flow-label">Temporal Workflow</div>
     </div>
-    <div class="flow-step">
-      <div class="flow-icon"><i class="fa-solid fa-bolt"></i></div>
-      <h4>Temporal Workflow</h4>
-      <div class="flow-desc">Durable orchestration with retry &amp; state</div>
+    <div class="arch-flow-arrow">→</div>
+    <div class="arch-flow-step">
+      <div class="arch-flow-icon"><i class="fa-brands fa-docker"></i></div>
+      <div class="arch-flow-label">K8s Pods</div>
     </div>
-    <div class="flow-step">
-      <div class="flow-icon"><i class="fa-brands fa-docker"></i></div>
-      <h4>K8s Pods</h4>
-      <div class="flow-desc">Each step in an isolated container</div>
-    </div>
-    <div class="flow-step">
-      <div class="flow-icon"><i class="fa-solid fa-circle-check"></i></div>
-      <h4>PR Results</h4>
-      <div class="flow-desc">Status, comments, logs on your PR</div>
+    <div class="arch-flow-arrow">→</div>
+    <div class="arch-flow-step">
+      <div class="arch-flow-icon"><i class="fa-solid fa-circle-check"></i></div>
+      <div class="arch-flow-label">PR Results</div>
     </div>
   </div>
 
-  <div class="arch-section">
-    <div class="arch-box">
-      <div class="arch-box-title">
-        <img src="/TemporalCI/icons/aws/eks.svg" alt="" /> EKS Auto Mode Cluster
+  <div class="arch-infra">
+    <div class="arch-infra-title">
+      <img src="/TemporalCI/icons/aws/eks.svg" alt="" /> Runs on EKS Auto Mode
+    </div>
+    <div class="arch-infra-grid">
+      <div class="arch-infra-item">
+        <img src="/TemporalCI/icons/aws/rds.svg" alt="" />
+        <span>RDS PostgreSQL</span>
       </div>
-
-      <div class="arch-nodes">
-        <div class="arch-node">
-          <i class="fa-solid fa-bolt" style="font-size:1.5rem;color:var(--accent)"></i>
-          <div>
-            <div class="arch-node-text">Temporal Server</div>
-            <div class="arch-node-sub">Workflow orchestration</div>
-          </div>
-        </div>
-        <div class="arch-node">
-          <i class="fa-solid fa-gears" style="font-size:1.5rem;color:var(--accent)"></i>
-          <div>
-            <div class="arch-node-text">TemporalCI Workers</div>
-            <div class="arch-node-sub">Go · Temporal SDK</div>
-          </div>
-        </div>
+      <div class="arch-infra-item">
+        <img src="/TemporalCI/icons/aws/cloudwatch.svg" alt="" />
+        <span>CloudWatch</span>
       </div>
-
-      <div class="arch-arrow">▼ connects to ▼</div>
-
-      <div class="arch-nodes">
-        <div class="arch-node">
-          <img src="/TemporalCI/icons/aws/rds.svg" alt="" />
-          <div>
-            <div class="arch-node-text">RDS PostgreSQL</div>
-            <div class="arch-node-sub">via ACK</div>
-          </div>
-        </div>
-        <div class="arch-node">
-          <i class="fa-brands fa-docker" style="font-size:1.5rem;color:#2496ED"></i>
-          <div>
-            <div class="arch-node-text">CI Job Pods</div>
-            <div class="arch-node-sub">ci-jobs NodePool</div>
-          </div>
-        </div>
+      <div class="arch-infra-item">
+        <img src="/TemporalCI/icons/aws/secrets-manager.svg" alt="" />
+        <span>Secrets Manager</span>
       </div>
-
-      <div class="arch-managed">
-        <div class="arch-managed-title">AWS Managed Services</div>
-        <div class="arch-services">
-          <div class="arch-svc">
-            <img src="/TemporalCI/icons/aws/eks.svg" alt="" />
-            EKS Capabilities: Argo CD · ACK
-          </div>
-          <div class="arch-svc">
-            <img src="/TemporalCI/icons/aws/secrets-manager.svg" alt="" />
-            Secrets Store CSI Driver · AWS Secrets Manager
-          </div>
-          <div class="arch-svc">
-            <img src="/TemporalCI/icons/aws/cloudwatch.svg" alt="" />
-            CloudWatch Observability · Container Insights
-          </div>
-          <div class="arch-svc">
-            <img src="/TemporalCI/icons/aws/vpc.svg" alt="" />
-            Auto Mode: Compute · VPC CNI · CoreDNS · EBS CSI
-          </div>
-          <div class="arch-svc">
-            <img src="/TemporalCI/icons/aws/ecr.svg" alt="" />
-            ECR · Container image registry
-          </div>
-        </div>
+      <div class="arch-infra-item">
+        <img src="/TemporalCI/icons/aws/ecr.svg" alt="" />
+        <span>ECR</span>
+      </div>
+      <div class="arch-infra-item">
+        <img src="/TemporalCI/icons/aws/s3.svg" alt="" />
+        <span>S3 Logs</span>
+      </div>
+      <div class="arch-infra-item">
+        <img src="/TemporalCI/icons/aws/vpc.svg" alt="" />
+        <span>VPC CNI</span>
       </div>
     </div>
+    <div class="arch-infra-note">Same Helm chart runs on minikube with zero AWS dependencies.</div>
   </div>
 </section>
 
-<hr class="section-divider" />
-
-{/* ── Features ── */}
+{/* ── Comparison: tight, scannable ── */}
 <section class="landing-section">
-  <div class="section-label">Features</div>
-  <h2 class="section-title">Built for teams that are done babysitting CI.</h2>
-
-  <div class="feature-grid">
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-bolt"></i></div>
-      <h3>Durable Workflows</h3>
-      <div class="feature-text">Powered by Temporal. Your pipeline state survives crashes, restarts, and node evictions. Resume from the last completed step, not from scratch.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-brands fa-docker"></i></div>
-      <h3>K8s-Native Execution</h3>
-      <div class="feature-text">Each CI step runs in its own pod with resource limits and node pool isolation. No shared runners. No noisy neighbors.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-rotate"></i></div>
-      <h3>Automatic Retries</h3>
-      <div class="feature-text">Per-step retry policies with exponential backoff. Clone fails? Retried 3x. Flaky network? Handled. You configure the policy, Temporal enforces it.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-chart-column"></i></div>
-      <h3>PR-Native Results</h3>
-      <div class="feature-text">Commit status, PR comments with per-step timing, collapsible logs, and direct links to the Temporal Web UI. Results where you already work.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
-      <h3>Secure by Default</h3>
-      <div class="feature-text">CI pods get zero K8s API access. Network policies block cluster-internal traffic. OIDC federation — no stored credentials.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-cube"></i></div>
-      <h3>One Helm Chart</h3>
-      <div class="feature-text">Same chart runs on minikube and EKS Auto Mode. Different values, same architecture. Local dev in minutes, production via GitOps.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-code-branch"></i></div>
-      <h3>DAG Execution</h3>
-      <div class="feature-text">Steps declare dependencies. Independent steps run in parallel. Failed dependencies skip downstream steps automatically.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
-      <h3>Full Observability</h3>
-      <div class="feature-text">Every workflow execution is inspectable and replayable in the Temporal Web UI. See exact inputs, outputs, and timing for every activity.</div>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon"><i class="fa-solid fa-ban"></i></div>
-      <h3>Cancel &amp; Replace</h3>
-      <div class="feature-text">New push on the same branch? Previous workflow is cancelled, cleanup runs, and GitHub shows "cancelled" — not "pending forever."</div>
-    </div>
-  </div>
-</section>
-
-<hr class="section-divider" />
-
-{/* ── Comparison ── */}
-<section class="landing-section">
-  <div class="section-label">Honest comparison</div>
-  <h2 class="section-title">How TemporalCI stacks up.</h2>
-  <div class="section-subtitle">We're not trying to replace everything. Here's where TemporalCI shines and where it doesn't.</div>
+  <div class="section-label">Comparison</div>
+  <h2 class="section-title">Why not just use…</h2>
 
   <div class="comparison-wrapper">
     <table class="comparison-table">
@@ -331,117 +198,53 @@ hero:
       </thead>
       <tbody>
         <tr>
-          <td>Execution</td>
-          <td class="highlight">Isolated K8s pods</td>
-          <td>Shared agents (VMs)</td>
-          <td>Hosted runners</td>
-        </tr>
-        <tr>
-          <td>Durability</td>
-          <td class="highlight">Temporal — survives crashes</td>
-          <td>None — restart from scratch</td>
-          <td>None — re-run entire workflow</td>
-        </tr>
-        <tr>
-          <td>Config</td>
-          <td class="highlight"><code>.temporalci.yaml</code></td>
-          <td>Groovy DSL</td>
-          <td>YAML (deeply nested)</td>
-        </tr>
-        <tr>
-          <td>Self-hosted</td>
-          <td class="highlight">✅ Your K8s cluster</td>
-          <td>✅ Your servers</td>
-          <td>❌ GitHub-hosted only</td>
-        </tr>
-        <tr>
-          <td>Scaling</td>
-          <td class="highlight">K8s auto-scaling</td>
-          <td>Manual agent management</td>
-          <td>Pay per minute</td>
-        </tr>
-        <tr>
-          <td>Debugging</td>
-          <td class="highlight">Temporal Web UI + pod logs</td>
-          <td>SSH + grep</td>
-          <td>Collapsed log viewer</td>
-        </tr>
-        <tr>
-          <td>Cost</td>
-          <td class="highlight">Free (your compute)</td>
-          <td>Free (your compute)</td>
-          <td>$0.008/min (Linux)</td>
+          <td>Build crashes</td>
+          <td class="highlight">Resumes from last step</td>
+          <td>Start over</td>
+          <td>Start over</td>
         </tr>
         <tr>
           <td>Retry</td>
-          <td class="highlight">Per-step, configurable</td>
-          <td>Re-run entire job</td>
-          <td>Re-run entire workflow</td>
+          <td class="highlight">Per-step, with backoff</td>
+          <td>Entire pipeline</td>
+          <td>Entire workflow</td>
+        </tr>
+        <tr>
+          <td>Isolation</td>
+          <td class="highlight">K8s pod per step</td>
+          <td>Shared VM agents</td>
+          <td>Shared runners</td>
+        </tr>
+        <tr>
+          <td>Config</td>
+          <td class="highlight">.temporalci.yaml</td>
+          <td>Groovy DSL</td>
+          <td>Nested YAML</td>
+        </tr>
+        <tr>
+          <td>Cost</td>
+          <td class="highlight">Your cluster</td>
+          <td>Your servers</td>
+          <td>$0.008/min</td>
         </tr>
       </tbody>
     </table>
   </div>
 </section>
 
-<hr class="section-divider" />
-
-{/* ── Quick Start ── */}
-<section class="landing-section">
-  <div class="section-label">Get started</div>
-  <h2 class="section-title">Running in 4 commands.</h2>
-  <div class="section-subtitle">From zero to CI on minikube. No AWS account required.</div>
-
-  <div class="quickstart-steps">
-    <div class="qs-step">
-      <div class="qs-number">1</div>
-      <div class="qs-content">
-        <h4>Start a cluster</h4>
-        <code>minikube start</code>
-      </div>
-    </div>
-    <div class="qs-step">
-      <div class="qs-number">2</div>
-      <div class="qs-content">
-        <h4>Install TemporalCI</h4>
-        <code>helm install temporalci ./deploy/helm -f values-local.yaml</code>
-      </div>
-    </div>
-    <div class="qs-step">
-      <div class="qs-number">3</div>
-      <div class="qs-content">
-        <h4>Add a pipeline config to your repo</h4>
-        <div class="qs-config-block">steps:<br />  - name: test<br />    image: golang:1.23<br />    command: go test ./...</div>
-      </div>
-    </div>
-    <div class="qs-step">
-      <div class="qs-number">4</div>
-      <div class="qs-content">
-        <h4>Push and see results on your PR</h4>
-        <code>git push origin feature-branch</code>
-      </div>
-    </div>
-  </div>
-
-  <div class="qs-cta">
-    <a href="/TemporalCI/getting-started/quickstart/" class="btn-primary">Full quickstart guide →</a>
-  </div>
-</section>
-
-{/* ── Footer CTA ── */}
+{/* ── CTA: clean close ── */}
 <section class="footer-cta">
-  <h2>Ready to ditch flaky CI?</h2>
-  <div class="footer-cta-sub">TemporalCI is open source and free to run on your own cluster.</div>
+  <h2>Try it in 5 minutes.</h2>
+  <div class="footer-cta-sub">minikube + helm install. No AWS account needed.</div>
   <div class="hero-actions">
     <a href="/TemporalCI/getting-started/quickstart/" class="btn-primary">Get Started →</a>
     <a href="https://github.com/AndreKurait/TemporalCI" class="btn-secondary"><i class="fa-regular fa-star"></i> Star on GitHub</a>
   </div>
   <div class="footer-links">
-    <a href="/TemporalCI/getting-started/quickstart/">Documentation</a>
+    <a href="/TemporalCI/getting-started/quickstart/">Docs</a>
     <a href="/TemporalCI/architecture/overview/">Architecture</a>
     <a href="/TemporalCI/blog/">Blog</a>
-    <a href="/TemporalCI/roadmap/">Roadmap</a>
     <a href="https://github.com/AndreKurait/TemporalCI">GitHub</a>
-    <a href="https://github.com/AndreKurait/TemporalCI/issues">Issues</a>
   </div>
 </section>
 

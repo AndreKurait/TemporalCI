@@ -43,12 +43,14 @@ type TriggerConfig struct {
 type PushFilter struct {
 	Branches []string `yaml:"branches,omitempty"`
 	Tags     []string `yaml:"tags,omitempty"`
+	Paths    []string `yaml:"paths,omitempty"`
 }
 
 // BranchFilter filters by branch names.
 type BranchFilter struct {
 	Branches []string `yaml:"branches,omitempty"`
 	Labels   []string `yaml:"labels,omitempty"`
+	Paths    []string `yaml:"paths,omitempty"`
 }
 
 // ScheduleEntry defines a cron schedule.
@@ -390,6 +392,28 @@ func (c *PipelineConfig) ShouldRun(event, ref string) bool {
 	return triggerMatches(c.On, event, ref)
 }
 
+// ShouldRunWithPaths checks if the pipeline should run, considering changed file paths.
+func (c *PipelineConfig) ShouldRunWithPaths(event, ref string, changedFiles []string) bool {
+	if c.On == nil {
+		return true
+	}
+	if !triggerMatches(c.On, event, ref) {
+		return false
+	}
+	// Check path filters
+	switch event {
+	case "push":
+		if c.On.Push != nil && len(c.On.Push.Paths) > 0 {
+			return MatchesChangedPaths(c.On.Push.Paths, changedFiles)
+		}
+	case "pull_request":
+		if c.On.PullRequest != nil && len(c.On.PullRequest.Paths) > 0 {
+			return MatchesChangedPaths(c.On.PullRequest.Paths, changedFiles)
+		}
+	}
+	return true
+}
+
 // MatchingEnvironments returns environments that should trigger for the given event/ref.
 func (c *PipelineConfig) MatchingEnvironments(event, ref string) map[string]*EnvConfig {
 	result := make(map[string]*EnvConfig)
@@ -473,4 +497,53 @@ func (s *StepConfig) GetCondition() string {
 		return s.When
 	}
 	return s.If
+}
+
+// MatchesChangedPaths checks if any changed file matches the path filters.
+// If no paths are configured, returns true (no filter = match all).
+func MatchesChangedPaths(paths []string, changedFiles []string) bool {
+	if len(paths) == 0 {
+		return true
+	}
+	for _, changed := range changedFiles {
+		for _, pattern := range paths {
+			if matchPath(pattern, changed) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// matchPath checks if a file path matches a glob-like pattern.
+// Supports: "src/**", "*.go", "docs/*", exact paths.
+func matchPath(pattern, path string) bool {
+	// Exact match
+	if pattern == path {
+		return true
+	}
+	// Directory prefix: "src/" matches "src/foo/bar.go"
+	if len(pattern) > 0 && pattern[len(pattern)-1] == '/' {
+		return len(path) > len(pattern) && path[:len(pattern)] == pattern
+	}
+	// "src/**" matches anything under src/
+	if strings.HasSuffix(pattern, "/**") {
+		prefix := pattern[:len(pattern)-3] + "/"
+		return strings.HasPrefix(path, prefix)
+	}
+	// "*.ext" matches any file with that extension
+	if strings.HasPrefix(pattern, "*.") {
+		ext := pattern[1:] // ".ext"
+		return strings.HasSuffix(path, ext)
+	}
+	// "dir/*" matches files directly in dir (not subdirs)
+	if strings.HasSuffix(pattern, "/*") {
+		dir := pattern[:len(pattern)-2] + "/"
+		if !strings.HasPrefix(path, dir) {
+			return false
+		}
+		rest := path[len(dir):]
+		return !strings.Contains(rest, "/")
+	}
+	return false
 }

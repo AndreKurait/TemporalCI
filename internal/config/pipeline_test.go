@@ -670,3 +670,86 @@ func TestAllowSkipConfig(t *testing.T) {
 		t.Error("allow-skip should be true")
 	}
 }
+
+func TestMatchesChangedPaths_NoPaths(t *testing.T) {
+	if !MatchesChangedPaths(nil, []string{"src/main.go"}) {
+		t.Error("no paths filter should match everything")
+	}
+}
+
+func TestMatchesChangedPaths_Exact(t *testing.T) {
+	if !MatchesChangedPaths([]string{"src/main.go"}, []string{"src/main.go"}) {
+		t.Error("exact match should work")
+	}
+	if MatchesChangedPaths([]string{"src/main.go"}, []string{"src/other.go"}) {
+		t.Error("should not match different file")
+	}
+}
+
+func TestMatchesChangedPaths_DoubleGlob(t *testing.T) {
+	paths := []string{"src/**"}
+	if !MatchesChangedPaths(paths, []string{"src/foo/bar.go"}) {
+		t.Error("src/** should match src/foo/bar.go")
+	}
+	if !MatchesChangedPaths(paths, []string{"src/main.go"}) {
+		t.Error("src/** should match src/main.go")
+	}
+	if MatchesChangedPaths(paths, []string{"docs/readme.md"}) {
+		t.Error("src/** should not match docs/readme.md")
+	}
+}
+
+func TestMatchesChangedPaths_Extension(t *testing.T) {
+	if !MatchesChangedPaths([]string{"*.go"}, []string{"internal/foo.go"}) {
+		t.Error("*.go should match .go files")
+	}
+	if MatchesChangedPaths([]string{"*.go"}, []string{"readme.md"}) {
+		t.Error("*.go should not match .md files")
+	}
+}
+
+func TestMatchesChangedPaths_DirGlob(t *testing.T) {
+	if !MatchesChangedPaths([]string{"docs/*"}, []string{"docs/readme.md"}) {
+		t.Error("docs/* should match docs/readme.md")
+	}
+	if MatchesChangedPaths([]string{"docs/*"}, []string{"docs/sub/file.md"}) {
+		t.Error("docs/* should not match subdirectory files")
+	}
+}
+
+func TestMatchesChangedPaths_DirPrefix(t *testing.T) {
+	if !MatchesChangedPaths([]string{"src/"}, []string{"src/foo/bar.go"}) {
+		t.Error("src/ should match files under src/")
+	}
+}
+
+func TestShouldRunWithPaths(t *testing.T) {
+	cfg := &PipelineConfig{
+		On: &TriggerConfig{
+			Push: &PushFilter{
+				Branches: []string{"main"},
+				Paths:    []string{"src/**", "*.go"},
+			},
+		},
+	}
+	if !cfg.ShouldRunWithPaths("push", "main", []string{"src/main.go"}) {
+		t.Error("should run for changed src file")
+	}
+	if cfg.ShouldRunWithPaths("push", "main", []string{"docs/readme.md"}) {
+		t.Error("should not run for docs-only change")
+	}
+	if cfg.ShouldRunWithPaths("push", "main", []string{"go.mod"}) {
+		t.Error("go.mod should not match src/** or *.go")
+	}
+}
+
+func TestShouldRunWithPaths_NoPaths(t *testing.T) {
+	cfg := &PipelineConfig{
+		On: &TriggerConfig{
+			Push: &PushFilter{Branches: []string{"main"}},
+		},
+	}
+	if !cfg.ShouldRunWithPaths("push", "main", []string{"anything.txt"}) {
+		t.Error("no path filter should match everything")
+	}
+}

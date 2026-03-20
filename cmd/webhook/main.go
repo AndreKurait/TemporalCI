@@ -70,6 +70,8 @@ func main() {
 	http.HandleFunc("/api/locks/", middleware.AuditLog(handleLockForceRelease))
 	http.HandleFunc("/api/lock-pools", middleware.AuditLog(handleLockPools))
 	http.HandleFunc("/api/artifacts/", middleware.AuditLog(handleArtifacts))
+	http.HandleFunc("/api/replay/", middleware.AuditLog(handleReplay))
+	http.HandleFunc("/badge/", handleBadge)
 	http.HandleFunc("/dashboard", handleDashboard)
 
 	slog.Info("starting webhook server", "port", cfg.WebhookPort)
@@ -401,6 +403,147 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"service": "TemporalCI", "status": "healthy"})
 }
 
+// handleBadge serves an SVG build status badge. GET /badge/{owner}/{repo}[/{branch}]
+func handleBadge(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/badge/")
+	parts := strings.SplitN(path, "/", 3)
+	if len(parts) < 2 {
+		http.Error(w, "path: /badge/{owner}/{repo}[/{branch}]", http.StatusBadRequest)
+		return
+	}
+
+	repoName := parts[0] + "/" + parts[1]
+	branch := "main"
+	if len(parts) == 3 && parts[2] != "" {
+		branch = parts[2]
+	}
+
+	// Query the latest workflow for this repo+branch
+	status := "unknown"
+	color := "#9f9f9f"
+
+	workflowID := fmt.Sprintf("ci-%s-refs/heads/%s-push", repoName, branch)
+	resp, err := temporalClient.QueryWorkflow(r.Context(), workflowID, "", "status")
+	if err == nil {
+		var s string
+		if resp.Get(&s) == nil {
+			status = s
+		}
+	}
+
+	switch status {
+	case "passed", "reporting":
+		status = "passing"
+		color = "#4c1"
+	case "failed":
+		status = "failing"
+		color = "#e05d44"
+	case "running", "pending", "cloning":
+		status = "running"
+		color = "#dfb317"
+	case "cancelled":
+		color = "#9f9f9f"
+	}
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	fmt.Fprint(w, badgeSVG("build", status, color))
+}
+
+// badgeSVG generates a shields.io-style SVG badge.
+func badgeSVG(label, status, color string) string {
+	labelWidth := len(label)*7 + 10
+	statusWidth := len(status)*7 + 10
+	totalWidth := labelWidth + statusWidth
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="20">
+  <linearGradient id="b" x2="0" y2="100%%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+  <mask id="a"><rect width="%d" height="20" rx="3" fill="#fff"/></mask>
+  <g mask="url(#a)">
+    <rect width="%d" height="20" fill="#555"/>
+    <rect x="%d" width="%d" height="20" fill="%s"/>
+    <rect width="%d" height="20" fill="url(#b)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
+    <text x="%d" y="15" fill="#010101" fill-opacity=".3">%s</text>
+    <text x="%d" y="14">%s</text>
+    <text x="%d" y="15" fill="#010101" fill-opacity=".3">%s</text>
+    <text x="%d" y="14">%s</text>
+  </g>
+</svg>`, totalWidth, totalWidth, labelWidth, labelWidth, statusWidth, color, totalWidth,
+		labelWidth/2, label, labelWidth/2, label,
+		labelWidth+statusWidth/2, status, labelWidth+statusWidth/2, status)
+}
+
+// handleReplay re-triggers a past workflow run. POST /api/replay/{workflowID}
+func handleReplay(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	workflowID := strings.TrimPrefix(r.URL.Path, "/api/replay/")
+	if workflowID == "" {
+		http.Error(w, "workflowID required", http.StatusBadRequest)
+		return
+	}
+
+	// Describe the original workflow to get its input
+	desc, err := temporalClient.DescribeWorkflowExecution(r.Context(), workflowID, "")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("workflow not found: %v", err), http.StatusNotFound)
+		return
+	}
+
+	// Start a new workflow with the same input but a new ID
+	newID := fmt.Sprintf("%s-replay-%d", workflowID, time.Now().UnixMilli())
+	opts := client.StartWorkflowOptions{
+		ID:        newID,
+		TaskQueue: taskQueue,
+	}
+
+	// Get the original input from the workflow history
+	iter := temporalClient.GetWorkflowHistory(r.Context(), workflowID, "", false, 0)
+	var originalInput []byte
+	for iter.HasNext() {
+		event, err := iter.Next()
+		if err != nil {
+			break
+		}
+		if event.GetWorkflowExecutionStartedEventAttributes() != nil {
+			attrs := event.GetWorkflowExecutionStartedEventAttributes()
+			if len(attrs.Input.Payloads) > 0 {
+				originalInput = attrs.Input.Payloads[0].Data
+			}
+			break
+		}
+	}
+
+	if originalInput == nil {
+		http.Error(w, "could not extract original input", http.StatusInternalServerError)
+		return
+	}
+
+	var input workflows.CIPipelineInput
+	if err := json.Unmarshal(originalInput, &input); err != nil {
+		http.Error(w, "could not parse original input", http.StatusInternalServerError)
+		return
+	}
+
+	run, err := temporalClient.ExecuteWorkflow(r.Context(), opts, "CIPipeline", input)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to start replay: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	slog.Info("replay triggered", "original", workflowID, "new", run.GetID())
+	_ = desc // used for validation above
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "accepted", "originalWorkflowId": workflowID,
+		"workflowId": run.GetID(), "runId": run.GetRunID(),
+	})
+}
+
 // parseEvent parses a GitHub webhook event and returns one or more pipeline inputs.
 // Multiple inputs are returned when a push/PR could trigger multiple named pipelines.
 func parseEvent(event string, body []byte) ([]workflows.CIPipelineInput, error) {
@@ -425,17 +568,41 @@ func parsePushEvent(body []byte) ([]workflows.CIPipelineInput, error) {
 		Repository struct {
 			FullName string `json:"full_name"`
 		} `json:"repository"`
+		Commits []struct {
+			Added    []string `json:"added"`
+			Removed  []string `json:"removed"`
+			Modified []string `json:"modified"`
+		} `json:"commits"`
 	}
 	if err := json.Unmarshal(body, &push); err != nil {
 		return nil, err
 	}
 
+	// Collect all changed files from commits
+	changedSet := map[string]bool{}
+	for _, c := range push.Commits {
+		for _, f := range c.Added {
+			changedSet[f] = true
+		}
+		for _, f := range c.Removed {
+			changedSet[f] = true
+		}
+		for _, f := range c.Modified {
+			changedSet[f] = true
+		}
+	}
+	var changedFiles []string
+	for f := range changedSet {
+		changedFiles = append(changedFiles, f)
+	}
+
 	input := workflows.CIPipelineInput{
-		Event:   "push",
-		Payload: string(body),
-		Repo:    push.Repository.FullName,
-		Ref:     push.Ref,
-		HeadSHA: push.After,
+		Event:        "push",
+		Payload:      string(body),
+		Repo:         push.Repository.FullName,
+		Ref:          push.Ref,
+		HeadSHA:      push.After,
+		ChangedFiles: changedFiles,
 	}
 
 	// Detect tag push
