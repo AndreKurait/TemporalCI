@@ -38,7 +38,6 @@ data:
 
           # Rewrite nested _app paths from relative CSS/JS references
           sub_filter_once off;
-          sub_filter_types text/html;
           sub_filter './_app/' '/ci/_app/';
         }
 

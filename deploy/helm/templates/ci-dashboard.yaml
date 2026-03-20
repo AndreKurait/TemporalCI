@@ -31,7 +31,7 @@ spec:
               value: "http://{{ .Release.Name }}-webhook:{{ .Values.webhook.port }}"
           livenessProbe:
             httpGet:
-              path: /
+              path: /ci/builds
               port: http
           resources:
             {{- toYaml .Values.ciDashboard.resources | nindent 12 }}
