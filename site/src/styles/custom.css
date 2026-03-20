@@ -27,6 +27,11 @@ body:has(.landing-page) main,
 body:has(.landing-page) .sl-markdown-content { padding: 0; }
 body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: none; }
 
+/* Hide Starlight's edit link, pagination, and footer on landing page */
+body:has(.landing-page) .pagination-links,
+body:has(.landing-page) footer,
+body:has(.landing-page) a[href*="edit/main"] { display: none !important; }
+
 /* ── Landing page: semantic color tokens mapped to Starlight ── */
 .landing-page {
   --bg: var(--sl-color-black);
