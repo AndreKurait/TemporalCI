@@ -155,6 +155,12 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 		slog.Info("started workflow", "id", run.GetID(), "runID", run.GetRunID(), "event", event, "repo", input.Repo, "pipeline", input.PipelineName)
+
+		// Set pending commit status immediately so GitHub shows it on the PR
+		if input.HeadSHA != "" && input.PipelineName == "" {
+			go setPendingCommitStatus(input.Repo, input.HeadSHA, run.GetID())
+		}
+
 		started = append(started, map[string]string{
 			"workflowId": run.GetID(), "runId": run.GetRunID(), "pipeline": input.PipelineName,
 		})
@@ -718,6 +724,36 @@ func parseIssuesEvent(body []byte) ([]workflows.CIPipelineInput, error) {
 			"ISSUE_NUMBER": fmt.Sprintf("%d", issue.Issue.Number),
 		},
 	}}, nil
+}
+
+func setPendingCommitStatus(repo, sha, workflowID string) {
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		return
+	}
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return
+	}
+	webURL := os.Getenv("TEMPORAL_WEB_URL")
+	targetURL := fmt.Sprintf("%s/namespaces/default/workflows/%s", webURL, workflowID)
+
+	body := fmt.Sprintf(`{"state":"pending","context":"TemporalCI","description":"Pipeline running...","target_url":%q}`, targetURL)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/statuses/%s", repo, sha)
+	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+	if err != nil {
+		slog.Warn("failed to create pending status request", "error", err)
+		return
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Warn("failed to set pending status", "error", err)
+		return
+	}
+	resp.Body.Close()
+	slog.Info("set pending commit status", "repo", repo, "sha", sha[:7])
 }
 
 func verifySignature(payload []byte, signature, secret string) bool {
