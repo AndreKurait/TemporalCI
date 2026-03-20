@@ -135,12 +135,10 @@ console.log('6. Landing page sections');
 const indexHtml = readFileSync(join(DIST, 'index.html'), 'utf8');
 const requiredSections = [
   ['hero-section', 'Hero'],
-  ['pain-grid', 'Problem/Pain'],
-  ['config-showcase', 'Config Showcase'],
-  ['flow-steps', 'How It Works flow'],
-  ['feature-grid', 'Feature Grid'],
+  ['pillars', 'Value Pillars'],
+  ['config-split', 'Config Showcase'],
+  ['arch-flow', 'Architecture Flow'],
   ['comparison-table', 'Comparison Table'],
-  ['quickstart-steps', 'Quickstart'],
   ['footer-cta', 'Footer CTA'],
 ];
 for (const [cls, name] of requiredSections) {
