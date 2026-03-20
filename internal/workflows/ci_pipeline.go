@@ -569,8 +569,13 @@ func runSinglePostStep(ctx workflow.Context, acts *activities.Activities, step a
 		timeout = "30m"
 	}
 
+	image := step.Image
+	if image == "" {
+		image = "alpine:latest"
+	}
+
 	stepInput := activities.RunStepInput{
-		Dir: dir, Command: step.GetEffectiveCommand(), Name: step.Name, Image: step.Image,
+		Dir: dir, Command: step.GetEffectiveCommand(), Name: step.Name, Image: image,
 		Repo: input.Repo, Ref: input.Ref, Secrets: stepSecrets,
 		Docker: step.Docker, Privileged: step.Privileged,
 	}
