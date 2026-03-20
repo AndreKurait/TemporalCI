@@ -199,20 +199,16 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
   border-radius: 0.25rem; font-size: 0.75rem;
 }
 
-/* ── Architecture flow ── */
-.arch-flow {
-  display: flex; align-items: center; justify-content: center;
-  gap: 0; margin-bottom: 1.5rem;
+/* ── Mermaid architecture diagram ── */
+.mermaid-wrapper {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border); border-radius: 0.75rem;
+  padding: 1.5rem; background: var(--surface); overflow-x: auto;
 }
-.arch-flow-step { text-align: center; padding: 0 1rem; }
-.arch-flow-icon {
-  width: 3.5rem; height: 3.5rem; border-radius: 0.75rem;
-  background: var(--surface); border: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.25rem; color: var(--accent); margin: 0 auto 0.5rem;
+.mermaid-wrapper pre.mermaid {
+  display: flex; justify-content: center;
+  background: transparent; border: none; padding: 0; margin: 0;
 }
-.arch-flow-label { font-size: 0.75rem; color: var(--fg2); font-weight: 500; }
-.arch-flow-arrow { color: var(--fg3); font-size: 0.875rem; }
 .arch-note {
   text-align: center; font-size: 0.8125rem; color: var(--fg3);
 }
@@ -282,8 +278,6 @@ body:has(.landing-page) .sl-markdown-content > :not(.landing-page) { display: no
   .pillar { text-align: left; display: flex; gap: 1rem; align-items: flex-start; }
   .pillar-icon { margin-bottom: 0; }
   .config-split { grid-template-columns: 1fr; }
-  .arch-flow { flex-wrap: wrap; gap: 0.5rem; }
-  .arch-flow-step { padding: 0 0.5rem; }
   .landing-section { padding: 2.5rem 1rem; }
   .footer-cta { padding: 3rem 1rem; }
 }

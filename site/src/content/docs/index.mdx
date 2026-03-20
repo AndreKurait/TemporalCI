@@ -120,31 +120,31 @@ hero:
   </div>
 </section>
 
-{/* ── How it works: just the flow ── */}
+{/* ── Architecture: Mermaid architecture diagram ── */}
 <section class="landing-section">
   <div class="section-label">How it works</div>
   <h2 class="section-title">Push code. Get results.</h2>
 
-  <div class="arch-flow">
-    <div class="arch-flow-step">
-      <div class="arch-flow-icon"><i class="fa-brands fa-github"></i></div>
-      <div class="arch-flow-label">git push</div>
-    </div>
-    <div class="arch-flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
-    <div class="arch-flow-step">
-      <div class="arch-flow-icon"><i class="fa-solid fa-bolt"></i></div>
-      <div class="arch-flow-label">Temporal workflow</div>
-    </div>
-    <div class="arch-flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
-    <div class="arch-flow-step">
-      <div class="arch-flow-icon"><i class="fa-brands fa-docker"></i></div>
-      <div class="arch-flow-label">K8s pods</div>
-    </div>
-    <div class="arch-flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
-    <div class="arch-flow-step">
-      <div class="arch-flow-icon"><i class="fa-solid fa-circle-check"></i></div>
-      <div class="arch-flow-label">PR status</div>
-    </div>
+  <div class="mermaid-wrapper">
+    <pre class="mermaid">
+{`architecture-beta
+    group eks(logos:aws-eks)[EKS Cluster]
+
+    service github(logos:github-icon)[GitHub] outside
+    service webhook(logos:webhooks)[Webhook Server] in eks
+    service temporal(logos:temporal-icon)[Temporal Server] in eks
+    service worker(logos:go)[TemporalCI Worker] in eks
+    service pods(logos:kubernetes)[CI Job Pods] in eks
+    service rds(logos:aws-rds)[RDS PostgreSQL] in eks
+    service s3(logos:aws-s3)[S3 Logs] in eks
+
+    github:R --> L:webhook
+    webhook:R --> L:temporal
+    temporal:R --> L:worker
+    worker:B --> T:pods
+    temporal:B --> T:rds
+    worker:R --> L:s3`}
+    </pre>
   </div>
 
   <div class="arch-note">Runs on any Kubernetes cluster — EKS, GKE, or minikube. <a href="/TemporalCI/architecture/overview/">See full architecture →</a></div>

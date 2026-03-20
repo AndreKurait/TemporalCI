@@ -137,7 +137,7 @@ const requiredSections = [
   ['hero-section', 'Hero'],
   ['pillars', 'Value Pillars'],
   ['config-split', 'Config Showcase'],
-  ['arch-flow', 'Architecture Flow'],
+  ['mermaid-wrapper', 'Architecture Diagram'],
   ['comparison-table', 'Comparison Table'],
   ['footer-cta', 'Footer CTA'],
 ];
