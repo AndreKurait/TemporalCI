@@ -9,14 +9,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// PipelineConfig defines the CI pipeline from .temporalci.yaml.
+// PipelineConfig defines the CI pipeline from .temporalci/ directory.
 type PipelineConfig struct {
-	On           *TriggerConfig        `yaml:"on,omitempty"`
-	Parameters   []ParameterConfig     `yaml:"parameters,omitempty"`
-	Steps        []StepConfig          `yaml:"steps,omitempty"`
-	Post         *PostConfig           `yaml:"post,omitempty"`
-	Environments map[string]*EnvConfig `yaml:"environments,omitempty"`
-	Pipelines    map[string]*Pipeline  `yaml:"pipelines,omitempty"`
+	Pipelines    map[string]*Pipeline  `yaml:"-"`
 }
 
 // Pipeline defines a named pipeline within a multi-pipeline config.
@@ -197,50 +192,40 @@ type ResourceConfig struct {
 	Memory string `yaml:"memory,omitempty"`
 }
 
-// EnvConfig defines an environment-scoped pipeline.
-type EnvConfig struct {
-	On       *TriggerConfig `yaml:"on,omitempty"`
-	Approval bool           `yaml:"approval,omitempty"`
-	Steps    []StepConfig   `yaml:"steps"`
-}
-
-// LoadPipelineConfig reads .temporalci.yaml from the given directory.
+// LoadPipelineConfig reads pipeline definitions from the .temporalci/ directory.
+// Each *.yaml file in the directory becomes a named pipeline (filename without extension).
 func LoadPipelineConfig(dir string) (*PipelineConfig, error) {
-	data, err := os.ReadFile(filepath.Join(dir, ".temporalci.yaml"))
+	pipelineDir := filepath.Join(dir, ".temporalci")
+	entries, err := os.ReadDir(pipelineDir)
 	if err != nil {
-		return nil, fmt.Errorf("read pipeline config: %w", err)
+		return nil, fmt.Errorf("read pipeline dir: %w", err)
 	}
-	var cfg PipelineConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse pipeline config: %w", err)
+
+	cfg := &PipelineConfig{Pipelines: make(map[string]*Pipeline)}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(pipelineDir, e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", e.Name(), err)
+		}
+		var p Pipeline
+		if err := yaml.Unmarshal(data, &p); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", e.Name(), err)
+		}
+		name := strings.TrimSuffix(e.Name(), ".yaml")
+		cfg.Pipelines[name] = &p
 	}
-	return &cfg, nil
+	if len(cfg.Pipelines) == 0 {
+		return nil, fmt.Errorf("no pipeline files found in %s", pipelineDir)
+	}
+	return cfg, nil
 }
 
-// DefaultConfig returns a default Go build+test pipeline.
-func DefaultConfig() *PipelineConfig {
-	return &PipelineConfig{
-		Steps: []StepConfig{
-			{Name: "build", Image: "golang:1.24", Command: "go build ./..."},
-			{Name: "test", Image: "golang:1.24", Command: "go test ./..."},
-		},
-	}
-}
-
-// GetPipelines returns all named pipelines. If the config uses the flat format,
-// it wraps it as a single pipeline named "default".
+// GetPipelines returns all named pipelines.
 func (c *PipelineConfig) GetPipelines() map[string]*Pipeline {
-	if len(c.Pipelines) > 0 {
-		return c.Pipelines
-	}
-	return map[string]*Pipeline{
-		"default": {
-			On:         c.On,
-			Parameters: c.Parameters,
-			Steps:      c.Steps,
-			Post:       c.Post,
-		},
-	}
+	return c.Pipelines
 }
 
 // ResolveParameters merges parameter defaults with overrides and returns env vars.
@@ -385,47 +370,33 @@ func detectCycle(steps []StepConfig) string {
 }
 
 // ShouldRun checks if the pipeline should run for the given event and ref.
-func (c *PipelineConfig) ShouldRun(event, ref string) bool {
-	if c.On == nil {
+func (p *Pipeline) ShouldRun(event, ref string) bool {
+	if p.On == nil {
 		return true
 	}
-	return triggerMatches(c.On, event, ref)
+	return triggerMatches(p.On, event, ref)
 }
 
 // ShouldRunWithPaths checks if the pipeline should run, considering changed file paths.
-func (c *PipelineConfig) ShouldRunWithPaths(event, ref string, changedFiles []string) bool {
-	if c.On == nil {
+func (p *Pipeline) ShouldRunWithPaths(event, ref string, changedFiles []string) bool {
+	if p.On == nil {
 		return true
 	}
-	if !triggerMatches(c.On, event, ref) {
+	if !triggerMatches(p.On, event, ref) {
 		return false
 	}
 	// Check path filters
 	switch event {
 	case "push":
-		if c.On.Push != nil && len(c.On.Push.Paths) > 0 {
-			return MatchesChangedPaths(c.On.Push.Paths, changedFiles)
+		if p.On.Push != nil && len(p.On.Push.Paths) > 0 {
+			return MatchesChangedPaths(p.On.Push.Paths, changedFiles)
 		}
 	case "pull_request":
-		if c.On.PullRequest != nil && len(c.On.PullRequest.Paths) > 0 {
-			return MatchesChangedPaths(c.On.PullRequest.Paths, changedFiles)
+		if p.On.PullRequest != nil && len(p.On.PullRequest.Paths) > 0 {
+			return MatchesChangedPaths(p.On.PullRequest.Paths, changedFiles)
 		}
 	}
 	return true
-}
-
-// MatchingEnvironments returns environments that should trigger for the given event/ref.
-func (c *PipelineConfig) MatchingEnvironments(event, ref string) map[string]*EnvConfig {
-	result := make(map[string]*EnvConfig)
-	for name, env := range c.Environments {
-		if env.On == nil {
-			continue
-		}
-		if triggerMatches(env.On, event, ref) {
-			result[name] = env
-		}
-	}
-	return result
 }
 
 func triggerMatches(tc *TriggerConfig, event, ref string) bool {

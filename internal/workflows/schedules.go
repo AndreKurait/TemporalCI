@@ -9,7 +9,7 @@ import (
 )
 
 // SyncSchedules creates/updates/deletes Temporal schedules based on pipeline config.
-// Called when a repo's .temporalci.yaml changes (on push to default branch).
+// Called when a repo's .temporalci/ config changes (on push to default branch).
 func SyncSchedules(ctx context.Context, tc client.Client, repo string, pipelines map[string]ScheduleSpec) error {
 	sc := tc.ScheduleClient()
 

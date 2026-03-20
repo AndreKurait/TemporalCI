@@ -18,7 +18,7 @@ func main() {
 			dryRun = true
 		case "-h", "--help":
 			fmt.Println("Usage: temporalci-validate [--dry-run] [directory]")
-			fmt.Println("  Validates .temporalci.yaml in the given directory (default: current)")
+			fmt.Println("  Validates .temporalci/ pipelines in the given directory (default: current)")
 			os.Exit(0)
 		default:
 			dir = arg
@@ -47,7 +47,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("✅ .temporalci.yaml is valid")
+	fmt.Println("✅ .temporalci/ pipelines are valid")
 	pipelines := cfg.GetPipelines()
 	for name, p := range pipelines {
 		fmt.Printf("  Pipeline %q: %d steps", name, len(p.Steps))

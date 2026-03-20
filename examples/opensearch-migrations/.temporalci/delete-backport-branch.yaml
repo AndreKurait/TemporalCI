@@ -1,0 +1,8 @@
+# Delete backport branches after PR merge
+on:
+  pull_request:
+
+steps:
+  - name: cleanup
+    when: "$branch startsWith 'backport/'"
+    command: "true"  # Handled by DeleteBranch activity

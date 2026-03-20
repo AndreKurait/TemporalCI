@@ -1,0 +1,91 @@
+# opensearch-migrations CI pipeline
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+steps:
+  - name: gradle-extended-check
+    image: temporalci/ci-base:opensearch-migrations
+    matrix:
+      task: [spotlessCheck, publishToMavenLocal]
+    command: ./gradlew ${{ matrix.task }}
+    timeout: 30m
+
+  - name: python-lint
+    image: temporalci/ci-base:opensearch-migrations
+    command: |
+      cd TrafficCapture && pipenv install --dev && pipenv run flake8
+
+  - name: python-tests
+    image: temporalci/ci-base:opensearch-migrations
+    matrix:
+      project: [trafficcapture, console_link, console_api]
+    privileged: true
+    docker: true
+    command: |
+      cd TrafficCapture/${{ matrix.project }}
+      pipenv install --dev
+      pipenv run pytest --junitxml=/artifacts/report.xml
+    artifacts:
+      upload:
+        - path: /artifacts/report.xml
+    timeout: 45m
+
+  - name: gradle-tests
+    image: temporalci/ci-base:opensearch-migrations
+    matrix:
+      index: ["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29"]
+    docker: true
+    command: |
+      ./gradlew allTests \
+        -Dtest.striping.total=30 \
+        -Dtest.striping.index=${{ matrix.index }} \
+        --info
+      codecov --flag gradle --file build/reports/jacoco/test/jacocoTestReport.xml
+    secrets: [CODECOV_TOKEN]
+    artifacts:
+      upload:
+        - path: /artifacts/report.xml
+    timeout: 60m
+
+  - name: python-e2e-tests
+    image: temporalci/ci-base:opensearch-migrations
+    docker: true
+    command: |
+      cd TrafficCapture
+      docker-compose -f docker/docker-compose.yml up -d
+      pipenv install --dev
+      pipenv run pytest e2eTests/ --junitxml=/artifacts/report.xml
+      codecov --flag python
+    secrets: [CODECOV_TOKEN]
+    timeout: 45m
+
+  - name: node-tests
+    image: temporalci/ci-base:opensearch-migrations
+    matrix:
+      project: [opensearch-migrations-dashboard, migration-assistant-ui, console_link_ui]
+    command: |
+      cd ${{ matrix.project }}
+      npm ci
+      npm test -- --coverage
+      codecov --flag node
+    secrets: [CODECOV_TOKEN]
+    timeout: 20m
+
+  - name: link-checker
+    image: temporalci/ci-base:opensearch-migrations
+    command: lychee --no-progress '**/*.md' '**/*.rst'
+    timeout: 10m
+
+  - name: all-ci-checks-pass
+    type: gate
+    depends_on:
+      - gradle-extended-check
+      - python-lint
+      - python-tests
+      - gradle-tests
+      - python-e2e-tests
+      - node-tests
+      - link-checker

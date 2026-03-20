@@ -1,0 +1,8 @@
+# Add untriaged label to new issues
+on:
+  issues:
+    types: [opened, reopened, transferred]
+
+steps:
+  - name: label
+    command: "true"  # Handled by AddLabel activity, no pod needed

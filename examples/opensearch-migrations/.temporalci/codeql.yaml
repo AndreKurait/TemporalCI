@@ -1,0 +1,19 @@
+# CodeQL security scanning (weekly)
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "25 22 * * 0"
+
+steps:
+  - name: codeql-analysis
+    image: temporalci/ci-codeql:latest
+    matrix:
+      language: [java-kotlin, javascript-typescript, python]
+    command: |
+      codeql database create /tmp/codeql-db --language=${{ matrix.language }} --source-root=.
+      codeql database analyze /tmp/codeql-db --format=sarif-latest --output=/artifacts/results.sarif
+    artifacts:
+      upload:
+        - path: /artifacts/results.sarif
+    timeout: 60m

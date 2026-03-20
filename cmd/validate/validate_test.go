@@ -8,16 +8,23 @@ import (
 	"github.com/AndreKurait/TemporalCI/internal/config"
 )
 
+func writePipeline(t *testing.T, dir, name, content string) {
+	t.Helper()
+	pDir := filepath.Join(dir, ".temporalci")
+	os.MkdirAll(pDir, 0755)
+	os.WriteFile(filepath.Join(pDir, name+".yaml"), []byte(content), 0644)
+}
+
 func TestValidate_ValidConfig(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(`steps:
+	writePipeline(t, dir, "ci", `steps:
   - name: build
     image: golang:1.24
     command: go build ./...
   - name: test
     depends_on: [build]
     command: go test ./...
-`), 0644)
+`)
 
 	cfg, err := config.LoadPipelineConfig(dir)
 	if err != nil {
@@ -31,14 +38,14 @@ func TestValidate_ValidConfig(t *testing.T) {
 
 func TestValidate_CircularDeps(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(`steps:
+	writePipeline(t, dir, "ci", `steps:
   - name: a
     depends_on: [b]
     command: echo a
   - name: b
     depends_on: [a]
     command: echo b
-`), 0644)
+`)
 
 	cfg, err := config.LoadPipelineConfig(dir)
 	if err != nil {
@@ -52,11 +59,11 @@ func TestValidate_CircularDeps(t *testing.T) {
 
 func TestValidate_UnknownDep(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(`steps:
+	writePipeline(t, dir, "ci", `steps:
   - name: test
     depends_on: [nonexistent]
     command: echo test
-`), 0644)
+`)
 
 	cfg, err := config.LoadPipelineConfig(dir)
 	if err != nil {
@@ -70,12 +77,12 @@ func TestValidate_UnknownDep(t *testing.T) {
 
 func TestValidate_DuplicateStepName(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(`steps:
+	writePipeline(t, dir, "ci", `steps:
   - name: build
     command: echo 1
   - name: build
     command: echo 2
-`), 0644)
+`)
 
 	cfg, err := config.LoadPipelineConfig(dir)
 	if err != nil {
@@ -89,12 +96,12 @@ func TestValidate_DuplicateStepName(t *testing.T) {
 
 func TestValidate_EmptyMatrixAxis(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(`steps:
+	writePipeline(t, dir, "ci", `steps:
   - name: test
     matrix:
       index: []
     command: echo $MATRIX_INDEX
-`), 0644)
+`)
 
 	cfg, err := config.LoadPipelineConfig(dir)
 	if err != nil {
@@ -108,20 +115,18 @@ func TestValidate_EmptyMatrixAxis(t *testing.T) {
 
 func TestValidate_MultiPipeline(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, ".temporalci.yaml"), []byte(`pipelines:
-  ci:
-    steps:
-      - name: test
-        command: go test
-  deploy:
-    parameters:
-      - name: ENV
-        type: choice
-        options: [staging, prod]
-    steps:
-      - name: deploy
-        command: ./deploy.sh
-`), 0644)
+	writePipeline(t, dir, "ci", `steps:
+  - name: test
+    command: go test
+`)
+	writePipeline(t, dir, "deploy", `parameters:
+  - name: ENV
+    type: choice
+    options: [staging, prod]
+steps:
+  - name: deploy
+    command: ./deploy.sh
+`)
 
 	cfg, err := config.LoadPipelineConfig(dir)
 	if err != nil {
@@ -145,7 +150,6 @@ func TestValidate_MissingConfig(t *testing.T) {
 }
 
 func TestValidate_SelfHostingConfig(t *testing.T) {
-	// Validate the actual .temporalci.yaml in the project root
 	cfg, err := config.LoadPipelineConfig("../..")
 	if err != nil {
 		t.Skipf("skipping: %v", err)

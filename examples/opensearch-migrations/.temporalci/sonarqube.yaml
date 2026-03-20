@@ -1,0 +1,20 @@
+# SonarQube analysis
+on:
+  push:
+    branches: [main]
+
+steps:
+  - name: sonar-scan
+    image: temporalci/ci-base:opensearch-migrations
+    services:
+      - name: sonarqube
+        image: sonarqube:25.10-community
+        ports: [9000]
+        health:
+          cmd: "curl -sf http://localhost:9000/api/system/health | grep -q GREEN"
+          interval: 10s
+          retries: 60
+    command: |
+      ./gradlew sonar -Dsonar.host.url=http://localhost:9000
+    secrets: [SONAR_TOKEN]
+    timeout: 30m

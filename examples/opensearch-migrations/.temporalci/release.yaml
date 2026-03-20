@@ -1,0 +1,62 @@
+# Release pipeline
+on:
+  push:
+    tags: ["*"]
+
+parameters:
+  - name: RELEASE_VERSION
+    type: string
+    description: "Release version (from tag)"
+
+steps:
+  - name: approval
+    type: gate
+
+  - name: maven-publish
+    image: temporalci/ci-release:latest
+    depends_on: [approval]
+    command: ./gradlew publishMavenJavaPublicationToMavenRepository
+    secrets: [MAVEN_USERNAME, MAVEN_PASSWORD]
+    timeout: 30m
+
+  - name: docker-build
+    image: temporalci/ci-release:latest
+    depends_on: [approval]
+    docker: true
+    privileged: true
+    command: |
+      docker buildx create --use
+      docker buildx build --platform linux/amd64,linux/arm64 \
+        -t opensearchstaging/migration-console:$TEMPORALCI_TAG \
+        --push .
+    secrets: [DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD]
+    timeout: 60m
+
+  - name: sbom
+    image: temporalci/ci-release:latest
+    depends_on: [docker-build]
+    command: |
+      syft opensearchstaging/migration-console:$TEMPORALCI_TAG -o spdx-json > /artifacts/sbom.json
+    artifacts:
+      upload:
+        - path: /artifacts/sbom.json
+
+  - name: helm-package
+    image: temporalci/ci-release:latest
+    depends_on: [approval]
+    command: |
+      helm package deployment/helm --version $TEMPORALCI_TAG --destination /artifacts/
+    artifacts:
+      upload:
+        - path: "/artifacts/*.tgz"
+
+  - name: create-release
+    depends_on: [maven-publish, docker-build, sbom, helm-package]
+    command: "true"  # Handled by CreateRelease activity
+
+post:
+  on_failure:
+    - name: notify-failure
+      command: |
+        curl -X POST $SLACK_WEBHOOK -d '{"text":"Release $TEMPORALCI_TAG failed"}'
+      secrets: [SLACK_WEBHOOK]

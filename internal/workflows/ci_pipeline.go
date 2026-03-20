@@ -10,7 +10,6 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/AndreKurait/TemporalCI/internal/activities"
-	"github.com/AndreKurait/TemporalCI/internal/config"
 	"github.com/AndreKurait/TemporalCI/internal/eval"
 )
 
@@ -56,9 +55,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	// 3. Load steps
 	steps := cloneResult.Steps
 	if len(steps) == 0 {
-		for _, s := range config.DefaultConfig().Steps {
-			steps = append(steps, activities.StepConfig{Name: s.Name, Image: s.Image, Command: s.Command})
-		}
+		return CIPipelineResult{Status: "failed", Error: "no pipeline steps found"}, nil
 	}
 
 	// 4. Fetch secrets for steps that need them
