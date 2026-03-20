@@ -112,7 +112,11 @@ func main() {
 	if awsErr == nil {
 		// S3 client for log uploads
 		if cfg.LogBucket != "" {
-			s3Client := s3.NewFromConfig(awsCfg)
+			s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+				if os.Getenv("AWS_ENDPOINT_URL") != "" {
+					o.UsePathStyle = true
+				}
+			})
 			acts.S3Client = s3Client
 			acts.S3Full = s3Client
 			acts.S3Presigner = s3.NewPresignClient(s3Client)

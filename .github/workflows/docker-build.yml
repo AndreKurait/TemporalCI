@@ -37,6 +37,16 @@ jobs:
           docker push "${IMAGE}:${GITHUB_SHA}"
           docker push "${IMAGE}:latest"
 
+      - name: Build and push dashboard
+        env:
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+        run: |
+          IMAGE="${ECR_REGISTRY}/temporalci-dashboard"
+          aws ecr create-repository --repository-name temporalci-dashboard --region ${{ vars.AWS_REGION }} 2>/dev/null || true
+          docker build -t "${IMAGE}:${GITHUB_SHA}" -t "${IMAGE}:latest" ./ui
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          docker push "${IMAGE}:latest"
+
       - name: Update image tag for GitOps
         run: |
           SHORT_SHA="${GITHUB_SHA:0:7}"
