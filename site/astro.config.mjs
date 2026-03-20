@@ -115,6 +115,19 @@ export default defineConfig({
           },
         },
         {
+          tag: 'script',
+          attrs: { type: 'module' },
+          content: `
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+            const isDark = document.documentElement.dataset.theme !== 'light';
+            mermaid.initialize({
+              startOnLoad: true,
+              theme: isDark ? 'dark' : 'default',
+              architecture: { padding: 40 },
+            });
+          `,
+        },
+        {
           tag: 'meta',
           attrs: { property: 'og:image', content: 'https://andrekurait.github.io/TemporalCI/og-image.png' },
         },
