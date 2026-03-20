@@ -129,7 +129,7 @@ func handleCIBuilds(w http.ResponseWriter, r *http.Request) {
 			query += " AND ExecutionStatus='" + ts + "'"
 		}
 	}
-	query += " ORDER BY StartTime DESC"
+	query += ""
 
 	resp, err := temporalClient.ListWorkflow(r.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 		Namespace: "default",
@@ -281,7 +281,7 @@ func handleCIRepos(w http.ResponseWriter, r *http.Request) {
 			RecentBuilds:  []string{},
 		}
 
-		query := fmt.Sprintf("WorkflowType='CIPipeline' AND WorkflowId STARTS_WITH 'ci-%s-' ORDER BY StartTime DESC", repo.FullName)
+		query := fmt.Sprintf("WorkflowType='CIPipeline' AND WorkflowId STARTS_WITH 'ci-%s-'", repo.FullName)
 		resp, err := temporalClient.ListWorkflow(r.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 			Namespace: "default",
 			Query:     query,
@@ -360,7 +360,7 @@ func handleCIRepoBadge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := "unknown"
-	query := fmt.Sprintf("WorkflowType='CIPipeline' AND WorkflowId STARTS_WITH 'ci-%s-refs/heads/%s-' ORDER BY StartTime DESC", repoName, repo.DefaultBranch)
+	query := fmt.Sprintf("WorkflowType='CIPipeline' AND WorkflowId STARTS_WITH 'ci-%s-refs/heads/%s-'", repoName, repo.DefaultBranch)
 	resp, err := temporalClient.ListWorkflow(r.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 		Namespace: "default",
 		Query:     query,
@@ -413,7 +413,7 @@ func handleCIAnalytics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	since := time.Now().AddDate(0, 0, -days).Format(time.RFC3339)
-	query := fmt.Sprintf("WorkflowType='CIPipeline' AND WorkflowId STARTS_WITH 'ci-%s-' AND StartTime > '%s' ORDER BY StartTime DESC", repo, since)
+	query := fmt.Sprintf("WorkflowType='CIPipeline' AND WorkflowId STARTS_WITH 'ci-%s-' AND StartTime > '%s'", repo, since)
 
 	resp, err := temporalClient.ListWorkflow(r.Context(), &workflowservice.ListWorkflowExecutionsRequest{
 		Namespace: "default",
