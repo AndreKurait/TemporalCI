@@ -29,9 +29,9 @@ data:
           add_header X-Cache-Status $upstream_cache_status;
         }
 
-        # CI Dashboard
+        # CI Dashboard — pass full path (SvelteKit base=/ci)
         location /ci/ {
-          proxy_pass http://{{ .Release.Name }}-ci-dashboard:{{ .Values.ciDashboard.port }};
+          proxy_pass http://{{ .Release.Name }}-ci-dashboard:{{ .Values.ciDashboard.port }}/ci/;
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
