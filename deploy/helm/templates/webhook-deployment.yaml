@@ -39,6 +39,26 @@ spec:
                   name: {{ .Release.Name }}-secrets
                   key: github-webhook-secret
             {{- end }}
+            {{- if .Values.githubOAuth.clientId }}
+            - name: GITHUB_CLIENT_ID
+              value: {{ .Values.githubOAuth.clientId | quote }}
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: github-oauth-secret
+                  optional: true
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secrets
+                  key: session-secret
+                  optional: true
+            {{- end }}
+            {{- if .Values.ciDashboard.publicRead }}
+            - name: PUBLIC_READ
+              value: "true"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health

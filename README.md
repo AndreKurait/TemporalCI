@@ -213,6 +213,34 @@ This isn't a wrapper around Temporal. The CI pipeline *is* a Temporal workflow. 
 
 **Live and running** on EKS in `us-east-1`. The [TemporalCI-test](https://github.com/AndreKurait/TemporalCI-test) repo has an active webhook — every push and PR triggers a real CI pipeline that clones, builds, tests, and reports results back to GitHub.
 
+## CI Dashboard
+
+TemporalCI includes a web-based CI Dashboard built with SvelteKit, backed by Go API endpoints on the webhook server. It provides a real-time view of your CI pipelines without needing the Temporal Web UI.
+
+**Pages:**
+- **Builds** — live list of all CI workflow runs with status, duration, and commit info
+- **Build Detail** — step-by-step view of a single pipeline run with logs
+- **Repos** — registered repositories with badge status and trigger controls
+- **Triggers** — manual pipeline trigger with branch/parameter selection
+- **Analytics** — build success rates, duration trends, and failure breakdowns
+
+**Run locally:**
+```bash
+make dashboard-install
+make dashboard-dev
+```
+
+**Deploy with Helm:**
+```yaml
+# In your values override:
+ciDashboard:
+  enabled: true
+```
+
+The dashboard is publicly readable by default (`publicRead: true`). To require GitHub OAuth for all access, set `publicRead: false` and configure `githubOAuth` credentials.
+
+<!-- TODO: Add screenshot -->
+
 ## License
 
 MIT

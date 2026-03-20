@@ -1,0 +1,74 @@
+:root {
+	--bg: #0d1117;
+	--bg-surface: #161b22;
+	--bg-card: #1c2128;
+	--bg-hover: #252c35;
+	--border: #30363d;
+	--text: #e6edf3;
+	--text-muted: #8b949e;
+	--text-link: #58a6ff;
+	--success: #4caf50;
+	--error: #f44336;
+	--warning: #ff9800;
+	--neutral: #9e9e9e;
+	--running: #58a6ff;
+	--font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+	--font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+	--radius: 6px;
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--bg: #ffffff;
+		--bg-surface: #f6f8fa;
+		--bg-card: #ffffff;
+		--bg-hover: #f3f4f6;
+		--border: #d0d7de;
+		--text: #1f2328;
+		--text-muted: #656d76;
+		--text-link: #0969da;
+	}
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+	font-family: var(--font);
+	background: var(--bg);
+	color: var(--text);
+	line-height: 1.5;
+}
+
+a { color: var(--text-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre { font-family: var(--font-mono); }
+
+button {
+	font-family: var(--font);
+	cursor: pointer;
+	border: 1px solid var(--border);
+	background: var(--bg-surface);
+	color: var(--text);
+	padding: 6px 12px;
+	border-radius: var(--radius);
+	font-size: 0.875rem;
+}
+button:hover { background: var(--bg-hover); }
+
+input, select {
+	font-family: var(--font);
+	background: var(--bg-surface);
+	color: var(--text);
+	border: 1px solid var(--border);
+	padding: 6px 10px;
+	border-radius: var(--radius);
+	font-size: 0.875rem;
+}
+
+.card {
+	background: var(--bg-card);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 16px;
+}

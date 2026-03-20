@@ -74,6 +74,9 @@ func main() {
 	http.HandleFunc("/badge/", handleBadge)
 	http.HandleFunc("/dashboard", handleDashboard)
 
+	// CI Dashboard API, auth, and notification routes
+	registerCIRoutes()
+
 	slog.Info("starting webhook server", "port", cfg.WebhookPort)
 	if err := http.ListenAndServe(":"+cfg.WebhookPort, nil); err != nil {
 		log.Fatalf("Server error: %v", err)

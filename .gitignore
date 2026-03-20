@@ -36,3 +36,8 @@ deploy/helm/charts/
 site/dist/
 site/node_modules/
 site/.astro/
+
+# Dashboard UI
+ui/node_modules/
+ui/.svelte-kit/
+ui/build/

@@ -54,3 +54,19 @@ local-port-forward:
 	@echo "Webhook:         http://localhost:8080"
 	kubectl port-forward svc/temporalci-temporal-web -n temporalci 8088:8088 &
 	kubectl port-forward svc/temporalci-webhook -n temporalci 8080:8080 &
+
+# --- CI Dashboard ---
+
+dashboard-install:
+	cd ui && npm ci
+
+dashboard-build:
+	cd ui && npm run build
+
+dashboard-dev:
+	cd ui && npm run dev
+
+docker-build-dashboard:
+	docker build -t temporalci-dashboard:latest ./ui
+
+docker-build-all: local-build docker-build-dashboard

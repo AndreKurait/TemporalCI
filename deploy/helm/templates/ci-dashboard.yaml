@@ -1,0 +1,51 @@
+{{- if .Values.ciDashboard.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-ci-dashboard
+  labels:
+    {{- include "temporalci.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ci-dashboard
+spec:
+  replicas: {{ .Values.ciDashboard.replicas }}
+  selector:
+    matchLabels:
+      {{- include "temporalci.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ci-dashboard
+  template:
+    metadata:
+      labels:
+        {{- include "temporalci.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ci-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: "{{ .Values.image.registry }}{{ if .Values.image.registry }}/{{ end }}{{ .Values.image.repository }}-dashboard:{{ .Values.image.tag }}"
+          ports:
+            - name: http
+              containerPort: {{ .Values.ciDashboard.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.ciDashboard.port | quote }}
+            - name: API_URL
+              value: "http://{{ .Release.Name }}-webhook:{{ .Values.webhook.port }}"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.ciDashboard.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-ci-dashboard
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.ciDashboard.port }}
+      targetPort: http
+  selector:
+    {{- include "temporalci.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ci-dashboard
+{{- end }}
