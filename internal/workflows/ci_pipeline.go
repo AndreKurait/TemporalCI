@@ -55,7 +55,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	// 3. Load steps
 	steps := cloneResult.Steps
 	if len(steps) == 0 {
-		return CIPipelineResult{Status: "failed", Error: "no pipeline steps found"}, nil
+		return CIPipelineResult{Status: "failed"}, nil
 	}
 
 	// 4. Fetch secrets for steps that need them

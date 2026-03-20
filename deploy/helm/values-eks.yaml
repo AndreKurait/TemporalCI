@@ -1,6 +1,6 @@
 image:
   registry: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
-  tag: 3744f6102bc6a37a197e0ac327892944dc2fb8bd
+  tag: dde54f05fc26acee8ed648b31068e294cfa8f095
   pullPolicy: Always
 
 worker:
@@ -151,3 +151,10 @@ cache:
     enabled: false
     storageClass: "efs-sc"
     size: "5Gi"
+
+# --- CI Dashboard ---
+ciDashboard:
+  enabled: true
+  replicas: 1
+  port: 3000
+  publicRead: true
