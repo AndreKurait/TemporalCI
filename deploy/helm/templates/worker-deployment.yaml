@@ -32,6 +32,8 @@ spec:
               value: "{{ .Release.Name }}-frontend:7233"
             - name: TEMPORAL_WEB_URL
               value: "{{ .Values.worker.temporalWebURL | default "" }}"
+            - name: DASHBOARD_URL
+              value: "http://{{ .Release.Name }}-ci-dashboard:{{ .Values.ciDashboard.port }}"
             {{- if .Values.logs.s3Bucket }}
             - name: LOG_BUCKET
               value: "{{ .Values.logs.s3Bucket }}"

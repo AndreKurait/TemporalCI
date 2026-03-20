@@ -45,6 +45,9 @@ func (a *Activities) CreateCheckRuns(ctx context.Context, input CheckRunInput) e
 		if step.Duration > 0.1 {
 			summary += fmt.Sprintf(" (%.1fs)", step.Duration)
 		}
+		if step.MatrixKey != "" {
+			summary += fmt.Sprintf(" `[%s]`", step.MatrixKey)
+		}
 
 		var text string
 		if step.Output != "" {
@@ -69,7 +72,13 @@ func (a *Activities) CreateCheckRuns(ctx context.Context, input CheckRunInput) e
 			opts.Output.Text = &text
 		}
 
-		if step.LogURL != "" {
+		if a.DashboardURL != "" && input.WorkflowID != "" {
+			u := DashboardBuildURL(a.DashboardURL, input.WorkflowID)
+			if step.Status == "failed" {
+				u += "#step-" + step.Name
+			}
+			opts.DetailsURL = &u
+		} else if step.LogURL != "" {
 			opts.DetailsURL = &step.LogURL
 		} else if a.TemporalWebURL != "" && input.WorkflowID != "" {
 			u := WorkflowURL(a.TemporalWebURL, input.WorkflowID)

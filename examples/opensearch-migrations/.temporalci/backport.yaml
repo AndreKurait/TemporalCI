@@ -1,0 +1,9 @@
+# Backport workflow — replaces backport.yml
+on:
+  pull_request:
+    types: [closed]
+
+steps:
+  - name: backport
+    when: "$PR_MERGED == 'true' && $labels contains 'backport'"
+    command: "true"  # Handled by CherryPick + CreatePullRequest activities

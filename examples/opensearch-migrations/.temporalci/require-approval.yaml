@@ -1,0 +1,10 @@
+# Require approval — replaces require-approval.yml
+# Checks that PR author is in CODEOWNERS before running privileged tests
+on:
+  pull_request:
+    types: [labeled]
+
+steps:
+  - name: check-approval
+    when: "labels contains 'run-jenkins' || labels contains 'run-eks-tests'"
+    command: "true"  # Handled by CODEOWNERS check activity

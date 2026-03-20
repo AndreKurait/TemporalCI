@@ -27,6 +27,7 @@ type Activities struct {
 	GitHubToken     string
 	GitHubApp       *ghapp.Client // GitHub App auth (preferred over PAT)
 	TemporalWebURL  string
+	DashboardURL    string
 	Namespace       string
 	S3Client        S3Uploader
 	S3Full          S3FullClient // extended S3 client for artifact list/get
@@ -336,7 +337,10 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 	description := fmt.Sprintf("CI %s (%d steps)", state, len(input.Steps))
 	ciContext := "TemporalCI"
 	status := &github.RepoStatus{State: &state, Description: &description, Context: &ciContext}
-	if a.TemporalWebURL != "" && input.WorkflowID != "" {
+	if a.DashboardURL != "" && input.WorkflowID != "" {
+		targetURL := DashboardBuildURL(a.DashboardURL, input.WorkflowID)
+		status.TargetURL = &targetURL
+	} else if a.TemporalWebURL != "" && input.WorkflowID != "" {
 		targetURL := WorkflowURL(a.TemporalWebURL, input.WorkflowID)
 		status.TargetURL = &targetURL
 	}
@@ -351,8 +355,11 @@ func (a *Activities) ReportResults(ctx context.Context, input ReportInput) error
 		if totalDuration > 0.1 {
 			fmt.Fprintf(&body, "**%d passed**, **%d failed** in **%.1fs**\n", passed, failed, totalDuration)
 		}
+		if a.DashboardURL != "" && input.WorkflowID != "" {
+			fmt.Fprintf(&body, "\n🔗 [View on TemporalCI Dashboard](%s)\n", DashboardBuildURL(a.DashboardURL, input.WorkflowID))
+		}
 		if a.TemporalWebURL != "" && input.WorkflowID != "" {
-			fmt.Fprintf(&body, "\n🔗 [View workflow run](%s)\n", WorkflowURL(a.TemporalWebURL, input.WorkflowID))
+			fmt.Fprintf(&body, "🔍 [View Temporal Workflow](%s)\n", WorkflowURL(a.TemporalWebURL, input.WorkflowID))
 		}
 		if details.Len() > 0 {
 			fmt.Fprintf(&body, "\n### Step Logs\n%s", details.String())
@@ -409,6 +416,11 @@ func TruncateOutput(s string, maxLen int) string {
 // WorkflowURL builds a URL to the Temporal Web UI for a workflow.
 func WorkflowURL(baseURL, workflowID string) string {
 	return fmt.Sprintf("%s/namespaces/default/workflows/%s", baseURL, url.PathEscape(workflowID))
+}
+
+// DashboardBuildURL builds a URL to the CI Dashboard for a workflow.
+func DashboardBuildURL(baseURL, workflowID string) string {
+	return fmt.Sprintf("%s/ci/builds/%s", baseURL, url.PathEscape(workflowID))
 }
 
 func trimRef(ref string) string {

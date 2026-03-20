@@ -1,0 +1,50 @@
+# Jenkins E2E tests — replaces jenkins_tests.yml
+# Triggered by PR with specific labels, requires CODEOWNERS approval
+on:
+  pull_request:
+    types: [labeled]
+
+steps:
+  - name: full-es68-e2e-aws-test
+    when: "labels contains 'run-jenkins-es68'"
+    image: temporalci/ci-base:opensearch-migrations
+    docker: true
+    privileged: true
+    command: |
+      cd TrafficCapture
+      docker-compose -f docker/docker-compose-es68.yml up -d
+      pipenv install --dev
+      pipenv run pytest e2eTests/fullTest/ --junitxml=/artifacts/report.xml
+    secrets: [AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY]
+    timeout: 120m
+    artifacts:
+      upload:
+        - path: /artifacts/report.xml
+
+  - name: elasticsearch-5x-k8s-local-test
+    when: "labels contains 'run-jenkins-es5x'"
+    image: temporalci/ci-base:opensearch-migrations
+    docker: true
+    privileged: true
+    command: |
+      kind create cluster --name es5x-test
+      export KUBECONFIG=$(kind get kubeconfig-path --name es5x-test)
+      ./deployment/k8s/run-es5x-test.sh
+    timeout: 90m
+    artifacts:
+      upload:
+        - path: /artifacts/report.xml
+
+  - name: eks-integ-test
+    when: "labels contains 'run-eks-tests'"
+    image: temporalci/ci-base:opensearch-migrations
+    aws_role:
+      role_arn_secret: EKS_TEST_ROLE_ARN
+    command: |
+      aws eks update-kubeconfig --name migration-test-cluster
+      ./deployment/k8s/run-integ-tests.sh
+    secrets: [EKS_TEST_ROLE_ARN]
+    timeout: 120m
+    artifacts:
+      upload:
+        - path: /artifacts/report.xml

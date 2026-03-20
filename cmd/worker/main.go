@@ -62,6 +62,7 @@ func main() {
 	acts := &activities.Activities{
 		GitHubToken:    cfg.GitHubToken,
 		TemporalWebURL: cfg.TemporalWebURL,
+		DashboardURL:   cfg.DashboardURL,
 		LogBucket:      cfg.LogBucket,
 		CINodePool:     os.Getenv("CI_NODE_POOL") == "true",
 		SecretsPrefix:  os.Getenv("SECRETS_PREFIX"),
