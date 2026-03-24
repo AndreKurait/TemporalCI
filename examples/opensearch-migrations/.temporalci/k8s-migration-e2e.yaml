@@ -1,0 +1,81 @@
+# OpenSearch Migrations k8s integ test — replaces Jenkins pipeline
+# Runs the MA workflow-based migration test on the prod EKS cluster
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    labels: [run-k8s-e2e]
+
+parameters:
+  - name: SOURCE_VERSION
+    type: choice
+    default: "ES_7.10"
+    options: ["ES_7.10", "ES_6.8", "ES_5.6", "ES_2.4", "ES_1.5"]
+    description: "Source Elasticsearch version"
+  - name: TARGET_VERSION
+    type: choice
+    default: "OS_2.19"
+    options: ["OS_2.19", "OS_1.3", "OS_3.1"]
+    description: "Target OpenSearch version"
+  - name: TEST_IDS
+    type: string
+    default: "0001"
+    description: "Comma-separated test IDs to run"
+
+steps:
+  - name: k8s-migration-integ-test
+    image: temporalci/ci-base:opensearch-migrations
+    aws_role:
+      role_arn_secret: EKS_TEST_ROLE_ARN
+    timeout: 30m
+    command: |
+      set -ex
+
+      # Configure EKS access
+      aws eks update-kubeconfig \
+        --name migration-eks-cluster-prod-us-east-2 \
+        --region us-east-2
+
+      # Verify cluster access
+      kubectl get nodes
+      kubectl get pods -n ma --no-headers | wc -l
+
+      # Clone opensearch-migrations at the tested commit
+      git clone --depth 1 https://github.com/opensearch-project/opensearch-migrations.git /tmp/osm
+      cd /tmp/osm/libraries/testAutomation
+
+      # Install test dependencies
+      pipenv install
+
+      # Run the integ test
+      pipenv run app \
+        --source-version=$SOURCE_VERSION \
+        --target-version=$TARGET_VERSION \
+        --test-ids=$TEST_IDS \
+        --kube-context="$(kubectl config current-context)" \
+        --skip-install \
+        --skip-delete \
+        --keep-workflows \
+        --test-reports-dir=/artifacts/reports
+
+      echo "✅ Migration integ test passed"
+    secrets: [EKS_TEST_ROLE_ARN]
+    artifacts:
+      upload:
+        - path: /artifacts/reports/
+
+  - name: all-checks
+    type: gate
+    depends_on: [k8s-migration-integ-test]
+
+post:
+  on_failure:
+    - name: cleanup-test-resources
+      command: |
+        echo "Cleaning up test resources..."
+        kubectl delete workflow -n ma --all --ignore-not-found 2>/dev/null || true
+        for r in $(kubectl get statefulset,svc,secret -n ma --no-headers -o name 2>/dev/null | grep -E "source-|target-"); do
+          kubectl delete $r -n ma --ignore-not-found 2>/dev/null || true
+        done
+        echo "Cleanup complete"
