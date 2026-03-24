@@ -110,7 +110,7 @@ postgresql:
   enabled: true
   primary:
     persistence:
-      storageClass: ebs-gp3
+      storageClass: auto-ebs-sc
     resources:
       requests:
         cpu: 250m

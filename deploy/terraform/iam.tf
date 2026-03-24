@@ -38,6 +38,27 @@ resource "aws_iam_role_policy_attachment" "eks_networking_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
 }
 
+# AmazonEKSComputePolicy only grants iam:AddRoleToInstanceProfile, not Create/Delete.
+# EKS Auto Mode needs to manage instance profiles for NodeClass resources.
+resource "aws_iam_role_policy" "eks_instance_profile_management" {
+  name = "instance-profile-management"
+  role = aws_iam_role.eks_cluster.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:GetInstanceProfile",
+        "iam:TagInstanceProfile",
+      ]
+      Resource = "arn:aws:iam::*:instance-profile/eks*"
+    }]
+  })
+}
+
 # --- EKS Node Role (Auto Mode) ---
 
 resource "aws_iam_role" "eks_node" {
