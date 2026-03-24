@@ -7,7 +7,7 @@ image:
 
 worker:
   replicas: 1
-  temporalWebURL: "http://<ELB_HOSTNAME>"
+  temporalWebURL: ""  # Set via: --set worker.temporalWebURL=http://<ELB_URL>
   resources:
     requests:
       cpu: 200m
@@ -160,4 +160,4 @@ ciDashboard:
   replicas: 1
   port: 3000
   publicRead: true
-  externalURL: "http://<ELB_HOSTNAME>"
+  externalURL: ""  # Set via: --set ciDashboard.externalURL=http://<ELB_URL>
