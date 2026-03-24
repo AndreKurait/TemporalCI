@@ -1,5 +1,5 @@
 # OpenSearch Migrations k8s integ test — replaces Jenkins pipeline
-# Runs the MA workflow-based migration test on the prod EKS cluster
+# Deploys a fresh MA stack via helm, runs migration tests, tears down
 on:
   push:
     branches: [main]
@@ -22,41 +22,76 @@ parameters:
     type: string
     default: "0001"
     description: "Comma-separated test IDs to run"
+  - name: DEPLOY_FRESH_CLUSTER
+    type: boolean
+    default: "false"
+    description: "Deploy a new EKS cluster via CloudFormation (slow, ~20min)"
 
 steps:
-  - name: k8s-migration-integ-test
+  # Option A: Full bootstrap — creates EKS cluster + all infra via CFN
+  - name: bootstrap-eks
+    when: "$DEPLOY_FRESH_CLUSTER == 'true'"
     image: temporalci/ci-base:opensearch-migrations
     aws_role:
-      role_arn_secret: EKS_TEST_ROLE_ARN
+      role_arn_secret: EKS_BOOTSTRAP_ROLE_ARN
     timeout: 30m
     command: |
       set -ex
+      cd /tmp/opensearch-migrations
+      STACK_NAME="ci-migration-${TEMPORALCI_SHA:0:8}"
+      deployment/k8s/aws/aws-bootstrap.sh \
+        --region us-east-2 \
+        --stage ci \
+        --deploy-create-vpc \
+        --namespace ma
+      echo "$STACK_NAME" > /artifacts/stack-name.txt
+    secrets: [EKS_BOOTSTRAP_ROLE_ARN]
+    artifacts:
+      upload:
+        - path: /artifacts/stack-name.txt
 
-      # Configure EKS access
+  # Option B (default): Use shared test cluster, fresh namespace per run
+  - name: configure-cluster
+    when: "$DEPLOY_FRESH_CLUSTER != 'true'"
+    image: temporalci/ci-base:opensearch-migrations
+    aws_role:
+      role_arn_secret: EKS_TEST_ROLE_ARN
+    timeout: 5m
+    command: |
+      set -ex
       aws eks update-kubeconfig \
         --name migration-eks-cluster-prod-us-east-2 \
         --region us-east-2
-
-      # Verify cluster access
       kubectl get nodes
-      kubectl get pods -n ma --no-headers | wc -l
+    secrets: [EKS_TEST_ROLE_ARN]
 
-      # Clone opensearch-migrations at the tested commit
-      git clone --depth 1 https://github.com/opensearch-project/opensearch-migrations.git /tmp/osm
-      cd /tmp/osm/libraries/testAutomation
+  # Run the migration integ test (helm installs fresh MA stack, runs test, cleans up)
+  - name: migration-integ-test
+    image: temporalci/ci-base:opensearch-migrations
+    depends_on: [bootstrap-eks, configure-cluster]
+    aws_role:
+      role_arn_secret: EKS_TEST_ROLE_ARN
+    lock: migration-test-cluster
+    lock_timeout: 30m
+    timeout: 45m
+    command: |
+      set -ex
+      cd /tmp/opensearch-migrations
 
-      # Install test dependencies
+      # testAutomation without --skip-install:
+      #   1. Deletes 'ma' namespace if it exists
+      #   2. Creates fresh 'ma' namespace
+      #   3. Helm installs the MA chart
+      #   4. Runs migration workflow tests
+      #   5. Cleans up (unless --skip-delete)
+      cd libraries/testAutomation
       pipenv install
 
-      # Run the integ test
       pipenv run app \
         --source-version=$SOURCE_VERSION \
         --target-version=$TARGET_VERSION \
         --test-ids=$TEST_IDS \
         --kube-context="$(kubectl config current-context)" \
-        --skip-install \
-        --skip-delete \
-        --keep-workflows \
         --test-reports-dir=/artifacts/reports
 
       echo "✅ Migration integ test passed"
@@ -67,15 +102,25 @@ steps:
 
   - name: all-checks
     type: gate
-    depends_on: [k8s-migration-integ-test]
+    depends_on: [migration-integ-test]
 
 post:
-  on_failure:
-    - name: cleanup-test-resources
+  always:
+    # Tear down CFN stack if we bootstrapped one
+    - name: teardown-eks
+      when: "$DEPLOY_FRESH_CLUSTER == 'true'"
       command: |
-        echo "Cleaning up test resources..."
-        kubectl delete workflow -n ma --all --ignore-not-found 2>/dev/null || true
-        for r in $(kubectl get statefulset,svc,secret -n ma --no-headers -o name 2>/dev/null | grep -E "source-|target-"); do
-          kubectl delete $r -n ma --ignore-not-found 2>/dev/null || true
-        done
-        echo "Cleanup complete"
+        STACK_NAME=$(cat /artifacts/stack-name.txt 2>/dev/null || echo "")
+        if [ -n "$STACK_NAME" ]; then
+          echo "Tearing down CFN stack: $STACK_NAME"
+          aws cloudformation delete-stack --stack-name "$STACK_NAME" --region us-east-2
+          aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region us-east-2
+          echo "✅ Stack deleted"
+        fi
+  on_failure:
+    - name: collect-debug-logs
+      command: |
+        echo "Collecting debug info..."
+        kubectl get pods -n ma -o wide 2>/dev/null || true
+        kubectl get workflows -n ma 2>/dev/null || true
+        kubectl get events -n ma --sort-by=.lastTimestamp 2>/dev/null | tail -30 || true
