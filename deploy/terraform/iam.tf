@@ -53,8 +53,24 @@ resource "aws_iam_role_policy" "eks_instance_profile_management" {
         "iam:DeleteInstanceProfile",
         "iam:GetInstanceProfile",
         "iam:TagInstanceProfile",
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
       ]
-      Resource = "arn:aws:iam::*:instance-profile/eks*"
+      Resource = "*"
+      Condition = {
+        StringEquals = {
+          "aws:ResourceTag/eks:cluster-name" = var.cluster_name
+        }
+      }
+    },
+    {
+      # CreateInstanceProfile doesn't support resource tags at creation time
+      Effect = "Allow"
+      Action = [
+        "iam:CreateInstanceProfile",
+        "iam:TagInstanceProfile",
+      ]
+      Resource = "arn:aws:iam::*:instance-profile/eks-*"
     }]
   })
 }

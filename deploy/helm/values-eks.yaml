@@ -1,4 +1,6 @@
 image:
+  # Set to terraform output: ecr_repository_url (without the repo name suffix)
+  # e.g., <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
   registry: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
   tag: 8bcae3ab5ed9a3a8c42b559f54323277bd2d941a
   pullPolicy: Always
