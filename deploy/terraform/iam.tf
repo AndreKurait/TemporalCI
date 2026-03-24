@@ -335,7 +335,7 @@ resource "aws_iam_role_policy" "github_actions" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
         ]
-        Resource = [aws_ecr_repository.temporalci.arn, "arn:aws:ecr:us-east-1:<ACCOUNT_ID>:repository/temporalci-dashboard"]
+        Resource = [aws_ecr_repository.temporalci.arn, "arn:aws:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/temporalci-dashboard"]
       },
     ]
   })

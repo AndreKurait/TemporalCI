@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.5"
 
   backend "s3" {
-    bucket = "temporalci-tfstate-<ACCOUNT_ID>"
+    bucket = "temporalci-tfstate"
     key    = "terraform.tfstate"
     region = "us-east-1"
   }

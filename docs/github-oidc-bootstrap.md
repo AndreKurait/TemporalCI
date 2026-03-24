@@ -21,7 +21,7 @@ This requires a one-time `terraform apply` with temporary credentials:
 ```bash
 cd deploy/terraform
 
-# Get temporary credentials for account <ACCOUNT_ID> (any method)
+# Get temporary credentials for your AWS account (any method)
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 export AWS_SESSION_TOKEN=...
@@ -49,3 +49,4 @@ AWS_ROLE_ARN = arn:aws:iam::<ACCOUNT_ID>:role/temporalci-github-actions
 - The role has least-privilege permissions (ECR push only for CI, full for Terraform)
 - OIDC tokens are ephemeral (valid ~15 minutes)
 - No long-lived credentials stored anywhere
+ere
