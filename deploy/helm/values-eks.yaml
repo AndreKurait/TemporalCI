@@ -121,7 +121,7 @@ postgresql:
         cpu: "1"
         memory: 1Gi
   image:
-    registry: public.ecr.aws
+    registry: docker.io
     repository: bitnami/postgresql
     tag: 17.2.0-debian-12-r6
 
