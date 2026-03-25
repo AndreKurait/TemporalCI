@@ -33,3 +33,12 @@ output "ack_role_arn" {
 output "github_actions_role_arn" {
   value = aws_iam_role.github_actions.arn
 }
+
+output "ecr_registry" {
+  description = "ECR registry URL (without repo name) for helm --set image.registry="
+  value       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com"
+}
+
+output "node_instance_profile" {
+  value = aws_iam_instance_profile.node.name
+}

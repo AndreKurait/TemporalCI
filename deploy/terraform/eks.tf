@@ -7,7 +7,7 @@ resource "aws_eks_cluster" "this" {
   bootstrap_self_managed_addons = false
 
   vpc_config {
-    subnet_ids              = aws_subnet.private[*].id
+    subnet_ids              = concat(aws_subnet.private[*].id, aws_subnet.public[*].id)
     endpoint_private_access = true
     endpoint_public_access  = true
   }
@@ -92,4 +92,47 @@ resource "aws_eks_addon" "ack_s3" {
   cluster_name             = aws_eks_cluster.this.name
   addon_name               = "ack-s3-controller"
   service_account_role_arn = aws_iam_role.ack.arn
+}
+
+# --- Instance Profile for Node Role ---
+# EKS Auto Mode's SLR lacks iam:AddRoleToInstanceProfile, so we pre-create it.
+
+resource "aws_iam_instance_profile" "node" {
+  name = "${var.cluster_name}-node"
+  role = aws_iam_role.eks_node.name
+}
+
+# --- Managed Node Group (x86, for running TemporalCI workloads) ---
+
+resource "aws_eks_node_group" "workers" {
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "workers"
+  node_role_arn   = aws_iam_role.eks_node.arn
+  subnet_ids      = aws_subnet.private[*].id
+
+  instance_types = ["m6a.large", "c6a.large", "m5.large", "c5.large"]
+  ami_type       = "AL2023_x86_64_STANDARD"
+  disk_size      = 80
+
+  scaling_config {
+    desired_size = 2
+    min_size     = 1
+    max_size     = 4
+  }
+
+  update_config {
+    max_unavailable = 1
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_worker_node_policy,
+    aws_iam_role_policy_attachment.eks_worker_node_minimal_policy,
+    aws_iam_role_policy_attachment.eks_cni_policy,
+    aws_iam_role_policy_attachment.ecr_read_only,
+    aws_iam_role_policy_attachment.eks_node_ssm,
+  ]
+
+  tags = {
+    Project = "TemporalCI"
+  }
 }

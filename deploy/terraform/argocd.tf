@@ -73,11 +73,14 @@ resource "kubernetes_manifest" "temporalci_app" {
     spec = {
       project = "default"
       source = {
-        repoURL        = "https://github.com/AndreKurait/TemporalCI.git"
+        repoURL        = "https://github.com/${var.github_repo}.git"
         targetRevision = "HEAD"
         path           = "deploy/helm"
         helm = {
-          valueFiles = ["values-eks.yaml"]
+          valueFiles = ["values.yaml", "values-eks.yaml"]
+          parameters = [
+            { name = "image.registry", value = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com" },
+          ]
         }
       }
       destination = {
