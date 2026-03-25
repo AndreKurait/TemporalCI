@@ -128,12 +128,12 @@ resource "aws_iam_instance_profile" "node" {
 
 resource "aws_eks_node_group" "workers" {
   cluster_name    = aws_eks_cluster.this.name
-  node_group_name = "workers"
+  node_group_name = "workers-arm"
   node_role_arn   = aws_iam_role.eks_node.arn
   subnet_ids      = aws_subnet.private[*].id
 
-  instance_types = ["m6a.large", "c6a.large", "m5.large", "c5.large"]
-  ami_type       = "AL2023_x86_64_STANDARD"
+  instance_types = ["m6g.large", "c6g.large", "m7g.large", "c7g.large"]
+  ami_type       = "AL2023_ARM_64_STANDARD"
   disk_size      = 80
 
   scaling_config {
