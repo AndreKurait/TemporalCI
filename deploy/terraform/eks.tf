@@ -81,6 +81,12 @@ resource "aws_eks_addon" "coredns" {
   addon_name   = "coredns"
 }
 
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name             = aws_eks_cluster.this.name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = aws_iam_role.ebs_csi.arn
+}
+
 # --- Access Entry ---
 
 resource "aws_eks_access_entry" "node" {
