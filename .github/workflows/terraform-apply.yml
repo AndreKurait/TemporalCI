@@ -1,0 +1,62 @@
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      import_ecr:
+        description: 'Import existing ECR repo (first run only)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write  # Required for OIDC federation with AWS
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/terraform
+    env:
+      TF_VAR_region: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: '1.9'
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Import existing ECR repo
+        if: inputs.import_ecr == true
+        run: terraform import aws_ecr_repository.temporalci temporalci || true
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+        if: inputs.action != 'destroy'
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+        if: inputs.action == 'apply'
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
+        if: inputs.action == 'destroy'
