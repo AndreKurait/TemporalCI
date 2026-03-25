@@ -63,7 +63,23 @@ resource "aws_eks_addon" "pod_identity" {
   addon_name   = "eks-pod-identity-agent"
 }
 
-# Note: vpc-cni, kube-proxy, coredns, ebs-csi are built into Auto Mode — no addon resources needed.
+# vpc-cni, kube-proxy, coredns are needed for managed node groups.
+# (Auto Mode nodes have these built-in, but managed node groups do not.)
+
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "vpc-cni"
+}
+
+resource "aws_eks_addon" "kube_proxy" {
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "kube-proxy"
+}
+
+resource "aws_eks_addon" "coredns" {
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "coredns"
+}
 
 # --- Access Entry ---
 
