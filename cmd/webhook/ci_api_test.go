@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"strings"
 	"testing"
@@ -43,13 +44,7 @@ func parseBuildFilters(params url.Values) BuildFilters {
 	f := BuildFilters{
 		Repo:   params.Get("repo"),
 		Status: params.Get("status"),
-		Limit:  50,
-	}
-	if v := params.Get("limit"); v != "" {
-		var n int
-		if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 {
-			f.Limit = n
-		}
+		Limit:  parseBuildLimit(params.Get("limit")),
 	}
 	return f
 }
@@ -223,7 +218,7 @@ func TestAnalyticsComputation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rate, avg := computeAnalytics(tt.statuses, tt.durations)
-			if rate != tt.expectedRate {
+			if math.Abs(rate-tt.expectedRate) > 1e-9 {
 				t.Errorf("successRate = %v, want %v", rate, tt.expectedRate)
 			}
 			if avg != tt.expectedAvg {

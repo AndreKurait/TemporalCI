@@ -4,47 +4,56 @@ import "strings"
 
 // CloneInput defines the input for the CloneRepo activity.
 type CloneInput struct {
-	Repo         string `json:"repo"`
-	Ref          string `json:"ref"`
-	WorkflowID   string `json:"workflowID"`
-	PipelineName string `json:"pipelineName,omitempty"`
+	Repo               string            `json:"repo"`
+	Ref                string            `json:"ref"`
+	WorkflowID         string            `json:"workflowID"`
+	PipelineName       string            `json:"pipelineName,omitempty"`
+	Event              string            `json:"event,omitempty"`
+	Payload            string            `json:"payload,omitempty"`
+	ChangedFiles       []string          `json:"changedFiles,omitempty"`
+	Labels             []string          `json:"labels,omitempty"`
+	Parameters         map[string]string `json:"parameters,omitempty"`
+	SkipPipelineConfig bool              `json:"skipPipelineConfig,omitempty"`
 }
 
 // CloneResult defines the output of the CloneRepo activity.
 type CloneResult struct {
-	Dir       string       `json:"dir"`
-	Steps     []StepConfig `json:"steps,omitempty"`
-	Post      *PostConfig  `json:"post,omitempty"`
-	Pipelines []string     `json:"pipelines,omitempty"`
+	Dir          string            `json:"dir"`
+	Steps        []StepConfig      `json:"steps,omitempty"`
+	Post         *PostConfig       `json:"post,omitempty"`
+	Pipelines    []string          `json:"pipelines,omitempty"`
+	PipelineName string            `json:"pipelineName,omitempty"`
+	Parameters   map[string]string `json:"parameters,omitempty"`
+	Skipped      bool              `json:"skipped,omitempty"`
 }
 
 // StepConfig mirrors config.StepConfig for serialization across activity boundary.
 type StepConfig struct {
-	Name       string          `json:"name"`
-	Image      string          `json:"image"`
-	Command    string          `json:"command"`
-	Commands   []string        `json:"commands,omitempty"`
-	Timeout    string          `json:"timeout,omitempty"`
-	DependsOn  []string        `json:"dependsOn,omitempty"`
-	Resources  *ResourceConfig `json:"resources,omitempty"`
-	Secrets    []string        `json:"secrets,omitempty"`
-	HelmTest   *HelmTestConfig `json:"helmTest,omitempty"`
-	When       string          `json:"when,omitempty"`
-	Type       string          `json:"type,omitempty"`
-	Matrix     *MatrixConfig   `json:"matrix,omitempty"`
-	Services   []ServiceConfig `json:"services,omitempty"`
-	Docker     bool            `json:"docker,omitempty"`
-	Privileged bool            `json:"privileged,omitempty"`
-	Artifacts  *ArtifactConfig `json:"artifacts,omitempty"`
-	DynamicMatrix string       `json:"dynamicMatrix,omitempty"`
-	Lock       string          `json:"lock,omitempty"`
-	LockPool   *LockPoolRef    `json:"lockPool,omitempty"`
-	LockTimeout string         `json:"lockTimeout,omitempty"`
-	AWSRole    *AWSRoleConfig  `json:"awsRole,omitempty"`
-	Trigger    *TriggerStep    `json:"trigger,omitempty"`
-	AllowSkip  bool            `json:"allowSkip,omitempty"`
-	Post       []string          `json:"post,omitempty"`
-	Outputs    map[string]string `json:"outputs,omitempty"`
+	Name          string            `json:"name"`
+	Image         string            `json:"image"`
+	Command       string            `json:"command"`
+	Commands      []string          `json:"commands,omitempty"`
+	Timeout       string            `json:"timeout,omitempty"`
+	DependsOn     []string          `json:"dependsOn,omitempty"`
+	Resources     *ResourceConfig   `json:"resources,omitempty"`
+	Secrets       []string          `json:"secrets,omitempty"`
+	HelmTest      *HelmTestConfig   `json:"helmTest,omitempty"`
+	When          string            `json:"when,omitempty"`
+	Type          string            `json:"type,omitempty"`
+	Matrix        *MatrixConfig     `json:"matrix,omitempty"`
+	Services      []ServiceConfig   `json:"services,omitempty"`
+	Docker        bool              `json:"docker,omitempty"`
+	Privileged    bool              `json:"privileged,omitempty"`
+	Artifacts     *ArtifactConfig   `json:"artifacts,omitempty"`
+	DynamicMatrix string            `json:"dynamicMatrix,omitempty"`
+	Lock          string            `json:"lock,omitempty"`
+	LockPool      *LockPoolRef      `json:"lockPool,omitempty"`
+	LockTimeout   string            `json:"lockTimeout,omitempty"`
+	AWSRole       *AWSRoleConfig    `json:"awsRole,omitempty"`
+	Trigger       *TriggerStep      `json:"trigger,omitempty"`
+	AllowSkip     bool              `json:"allowSkip,omitempty"`
+	Post          []string          `json:"post,omitempty"`
+	Outputs       map[string]string `json:"outputs,omitempty"`
 }
 
 // GetEffectiveCommand returns the command string, joining Commands if needed.
@@ -109,9 +118,9 @@ type LockPoolRef struct {
 
 // AWSRoleConfig defines IAM role assumption for a step.
 type AWSRoleConfig struct {
-	ARN              string `json:"arn"`
-	Duration         int    `json:"duration,omitempty"`
-	SessionName      string `json:"sessionName,omitempty"`
+	ARN               string `json:"arn"`
+	Duration          int    `json:"duration,omitempty"`
+	SessionName       string `json:"sessionName,omitempty"`
 	SourceCredentials string `json:"sourceCredentials,omitempty"` // step name to chain from
 }
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 
 // PipelineConfig defines the CI pipeline from .temporalci/ directory.
 type PipelineConfig struct {
-	Pipelines    map[string]*Pipeline  `yaml:"-"`
+	Pipelines map[string]*Pipeline `yaml:"-"`
 }
 
 // Pipeline defines a named pipeline within a multi-pipeline config.
@@ -71,10 +72,10 @@ type EventFilter struct {
 // ParameterConfig defines a pipeline parameter.
 type ParameterConfig struct {
 	Name        string   `yaml:"name"`
-	Type        string   `yaml:"type"`                  // string, choice, boolean
+	Type        string   `yaml:"type"` // string, choice, boolean
 	Default     string   `yaml:"default,omitempty"`
 	Description string   `yaml:"description,omitempty"`
-	Options     []string `yaml:"options,omitempty"`      // for choice type
+	Options     []string `yaml:"options,omitempty"` // for choice type
 }
 
 // PostConfig defines cleanup/notification steps.
@@ -94,31 +95,31 @@ type MatrixConfig struct {
 
 // StepConfig defines a single pipeline step.
 type StepConfig struct {
-	Name       string          `yaml:"name"`
-	Image      string          `yaml:"image,omitempty"`
-	Command    string          `yaml:"command,omitempty"`
-	Commands   []string        `yaml:"commands,omitempty"`
-	Timeout    string          `yaml:"timeout,omitempty"`
-	DependsOn  []string        `yaml:"depends_on,omitempty"`
-	Resources  *ResourceConfig `yaml:"resources,omitempty"`
-	Secrets    []string        `yaml:"secrets,omitempty"`
-	HelmTest   *HelmTestConfig `yaml:"helm_test,omitempty"`
-	When       string          `yaml:"when,omitempty"`
-	If         string          `yaml:"if,omitempty"` // alias for When
-	Type       string          `yaml:"type,omitempty"` // "", "gate"
-	Matrix     *MatrixConfig   `yaml:"matrix,omitempty"`
-	Services   []ServiceConfig `yaml:"services,omitempty"`
-	Docker     bool            `yaml:"docker,omitempty"`
-	Privileged bool            `yaml:"privileged,omitempty"`
-	Artifacts  *ArtifactConfig `yaml:"artifacts,omitempty"`
-	DynamicMatrix string       `yaml:"dynamic_matrix,omitempty"`
-	Lock       string          `yaml:"lock,omitempty"`
-	LockPool   *LockPoolRef    `yaml:"lock_pool,omitempty"`
-	LockTimeout string         `yaml:"lock_timeout,omitempty"`
-	AWSRole    *AWSRoleConfig  `yaml:"aws_role,omitempty"`
-	Trigger    *TriggerStep    `yaml:"trigger,omitempty"`
-	AllowSkip  bool            `yaml:"allow-skip,omitempty"`
-	Post       []string        `yaml:"post,omitempty"`
+	Name          string          `yaml:"name"`
+	Image         string          `yaml:"image,omitempty"`
+	Command       string          `yaml:"command,omitempty"`
+	Commands      []string        `yaml:"commands,omitempty"`
+	Timeout       string          `yaml:"timeout,omitempty"`
+	DependsOn     []string        `yaml:"depends_on,omitempty"`
+	Resources     *ResourceConfig `yaml:"resources,omitempty"`
+	Secrets       []string        `yaml:"secrets,omitempty"`
+	HelmTest      *HelmTestConfig `yaml:"helm_test,omitempty"`
+	When          string          `yaml:"when,omitempty"`
+	If            string          `yaml:"if,omitempty"`   // alias for When
+	Type          string          `yaml:"type,omitempty"` // "", "gate"
+	Matrix        *MatrixConfig   `yaml:"matrix,omitempty"`
+	Services      []ServiceConfig `yaml:"services,omitempty"`
+	Docker        bool            `yaml:"docker,omitempty"`
+	Privileged    bool            `yaml:"privileged,omitempty"`
+	Artifacts     *ArtifactConfig `yaml:"artifacts,omitempty"`
+	DynamicMatrix string          `yaml:"dynamic_matrix,omitempty"`
+	Lock          string          `yaml:"lock,omitempty"`
+	LockPool      *LockPoolRef    `yaml:"lock_pool,omitempty"`
+	LockTimeout   string          `yaml:"lock_timeout,omitempty"`
+	AWSRole       *AWSRoleConfig  `yaml:"aws_role,omitempty"`
+	Trigger       *TriggerStep    `yaml:"trigger,omitempty"`
+	AllowSkip     bool            `yaml:"allow-skip,omitempty"`
+	Post          []string        `yaml:"post,omitempty"`
 }
 
 // ServiceConfig defines a sidecar service container.
@@ -163,9 +164,9 @@ type LockPoolRef struct {
 
 // AWSRoleConfig defines IAM role assumption for a step.
 type AWSRoleConfig struct {
-	ARN              string `yaml:"arn"`
-	Duration         int    `yaml:"duration,omitempty"`
-	SessionName      string `yaml:"session_name,omitempty"`
+	ARN               string `yaml:"arn"`
+	Duration          int    `yaml:"duration,omitempty"`
+	SessionName       string `yaml:"session_name,omitempty"`
 	SourceCredentials string `yaml:"source_credentials,omitempty"` // step name to chain credentials from
 }
 
@@ -399,19 +400,90 @@ func (p *Pipeline) ShouldRunWithPaths(event, ref string, changedFiles []string) 
 	return true
 }
 
+// ShouldRunForEvent applies trigger filters before any pipeline steps or secrets
+// are used. Missing event metadata fails closed for a configured filter.
+func (p *Pipeline) ShouldRunForEvent(event, ref, payload string, changedFiles, labels []string) bool {
+	var fields map[string]interface{}
+	_ = json.Unmarshal([]byte(payload), &fields)
+	if event == "pull_request" {
+		// GitHub branch filters refer to the PR's target branch.
+		base, _ := eventField(fields, "pull_request.base.ref").(string)
+		if base != "" {
+			ref = base
+		} else if p.On != nil && p.On.PullRequest != nil && len(p.On.PullRequest.Branches) > 0 {
+			return false
+		}
+	}
+	if !p.ShouldRunWithPaths(event, ref, changedFiles) {
+		return false
+	}
+	if p.On == nil {
+		return true
+	}
+	switch event {
+	case "pull_request":
+		for _, required := range p.On.PullRequest.Labels {
+			if !containsString(labels, required) {
+				return false
+			}
+		}
+	case "release":
+		return matchEventType(p.On.Release.Types, fields)
+	case "issues":
+		return matchEventType(p.On.Issues.Types, fields)
+	case "webhook", "manual":
+		for key, expected := range p.On.Webhook.Match {
+			value := eventField(fields, key)
+			if value == nil || fmt.Sprint(value) != expected {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func eventField(fields map[string]interface{}, key string) interface{} {
+	var value interface{} = fields
+	for _, part := range strings.Split(key, ".") {
+		object, ok := value.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		value = object[part]
+	}
+	return value
+}
+
+func containsString(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+func matchEventType(types []string, fields map[string]interface{}) bool {
+	if len(types) == 0 {
+		return true
+	}
+	action, _ := fields["action"].(string)
+	return containsString(types, action)
+}
+
 func triggerMatches(tc *TriggerConfig, event, ref string) bool {
 	switch event {
 	case "push":
 		if tc.Push != nil {
-			return matchBranch(tc.Push.Branches, ref) || matchTag(tc.Push.Tags, ref)
+			if strings.HasPrefix(ref, "refs/tags/") {
+				return matchTag(tc.Push.Tags, ref)
+			}
+			// A tags-only filter must not admit branch pushes.
+			return (len(tc.Push.Branches) > 0 || len(tc.Push.Tags) == 0) && matchBranch(tc.Push.Branches, ref)
 		}
 	case "pull_request":
 		if tc.PullRequest != nil {
-			branchOK := matchBranch(tc.PullRequest.Branches, ref)
-			if len(tc.PullRequest.Labels) > 0 {
-				return branchOK // label filtering is done at webhook level via CIPipelineInput.Labels
-			}
-			return branchOK
+			return matchBranch(tc.PullRequest.Branches, ref)
 		}
 	case "tag":
 		if tc.Push != nil {
@@ -423,16 +495,19 @@ func triggerMatches(tc *TriggerConfig, event, ref string) bool {
 		return len(tc.Schedule) > 0
 	case "issues":
 		return tc.Issues != nil
+	case "webhook", "manual":
+		return tc.Webhook != nil
 	}
 	return false
 }
 
 func matchBranch(branches []string, ref string) bool {
+	ref = strings.TrimPrefix(ref, "refs/heads/")
 	if len(branches) == 0 {
 		return true
 	}
 	for _, b := range branches {
-		if b == ref {
+		if matched, _ := filepath.Match(b, ref); matched {
 			return true
 		}
 	}
@@ -440,11 +515,12 @@ func matchBranch(branches []string, ref string) bool {
 }
 
 func matchTag(tags []string, ref string) bool {
+	ref = strings.TrimPrefix(ref, "refs/tags/")
 	if len(tags) == 0 {
 		return false
 	}
 	for _, t := range tags {
-		if t == "*" || t == ref {
+		if matched, _ := filepath.Match(t, ref); matched {
 			return true
 		}
 	}

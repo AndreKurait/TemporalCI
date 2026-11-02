@@ -16,7 +16,7 @@ GitHub webhook → Webhook Server → Temporal Server → Worker → K8s Pods
 | **Webhook Server** | Validates GitHub signatures, starts Temporal workflows |
 | **Temporal Server** | Durable workflow orchestration, task queues, history |
 | **Worker** | Executes CI activities — clone, run steps, report results |
-| **CI Job Pods** | Ephemeral K8s pods running each CI step in isolation |
+| **CI Job Pods** | Ephemeral K8s pods running build steps; not a complete tenant isolation boundary |
 
 ## Data Flow
 
@@ -24,21 +24,24 @@ GitHub webhook → Webhook Server → Temporal Server → Worker → K8s Pods
 2. Webhook server validates the HMAC signature
 3. Webhook server starts a `CIPipeline` Temporal workflow
 4. Worker picks up the workflow from the task queue
-5. Worker clones the repo, reads `.temporalci.yaml`
-6. Worker creates K8s pods for each step (respecting DAG dependencies)
+5. Worker clones the repo and selects matching named pipelines from `.temporalci/*.yaml`
+6. Worker creates K8s pods for each step; regular steps run in declaration order and check dependencies
 7. Worker streams pod logs and collects exit codes
-8. Worker uploads full logs to S3 with presigned URLs
-9. Worker reports results to GitHub (commit status + PR comment)
+8. Worker uploads logs when object storage is configured
+9. Worker reports results when GitHub credentials and event metadata permit it
 
 ## Security Model
 
 | Layer | Mechanism |
 |-------|-----------|
 | **Webhook validation** | HMAC-SHA256 signature verification |
-| **Secret storage** | K8s Secrets (local) or AWS Secrets Manager (prod) |
-| **IAM** | EKS Pod Identity — least-privilege per component |
-| **Network isolation** | CI jobs on dedicated `ci-jobs` NodePool with taints |
-| **Container isolation** | Each CI step in its own ephemeral pod |
+| **Secret storage** | K8s Secrets in the local/EKS values; optional AWS Secrets Manager integration |
+| **IAM** | EKS role and Pod Identity examples require configuration and permission review |
+| **Scheduling** | Optional `ci-jobs` NodePool; taints control placement, not network access |
+| **Network policy** | Disabled by default; enforcement depends on the cluster CNI |
+| **Execution** | Ephemeral K8s pods; local fallback runs commands as the worker's operating-system user |
+
+Temporal records workflow decisions, not worker-local files or running commands. Repository registration is file-backed; sessions and notifications are in memory. See the [security model](/TemporalCI/concepts/security/) before adding replicas or accepting untrusted code.
 
 ## Project Structure
 
@@ -50,7 +53,7 @@ internal/
   workflows/       # CIPipeline, ClusterPool, HelmTestPipeline
   activities/      # CloneRepo, RunStep, ReportResults, UploadLog
   k8s/             # Pod creation, log streaming, cleanup
-  config/          # App config + .temporalci.yaml parser
+  config/          # App config + named .temporalci/*.yaml pipeline parser
 deploy/
   helm/            # Umbrella Helm chart (Temporal + PostgreSQL subcharts)
   terraform/       # EKS, ECR, IAM, OIDC provider
@@ -59,7 +62,7 @@ deploy/
 ## Key Design Decisions
 
 - **Temporal for orchestration** — workflows are plain Go functions with full replay semantics
-- **K8s pods for isolation** — each CI step gets its own pod, image, and resource limits
-- **EKS Auto Mode for compute** — nodes provisioned on demand, no idle capacity
-- **ArgoCD for deployment** — push to main → ECR → ArgoCD syncs
-- **OIDC for auth** — GitHub Actions → AWS IAM, no stored credentials
+- **K8s execution** — each Kubernetes step gets its own pod, image, and resource limits
+- **EKS Auto Mode for compute** — optional node provisioning for the EKS experiment
+- **ArgoCD deployment example** — the main-branch image workflow updates GitOps values; applying them requires a configured, running ArgoCD controller
+- **OIDC for AWS deployment auth** — GitHub Actions can obtain temporary AWS credentials; GitHub/OAuth secrets and credentials in workflow history still require protection

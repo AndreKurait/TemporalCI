@@ -39,7 +39,7 @@ When a new push arrives on the same branch, TemporalCI:
 | Activity | Retries | Timeout | Notes |
 |----------|---------|---------|-------|
 | CloneRepo | 3 | 5m | Handles transient git/network failures |
-| RunStep | 1 | Per-step config | Respects `.temporalci.yaml` timeout |
+| RunStep | 1 | Per-step config | Respects `.temporalci/default.yaml` timeout |
 | UploadLog | 2 | 2m | S3 upload with presigned URL |
 | ReportResults | 3 | 1m | GitHub API can be flaky |
 

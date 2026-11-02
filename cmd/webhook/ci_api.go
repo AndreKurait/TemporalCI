@@ -19,17 +19,17 @@ import (
 )
 
 type buildSummary struct {
-	WorkflowID   string       `json:"workflowId"`
-	RunID        string       `json:"runId"`
-	Repo         string       `json:"repo"`
-	Ref          string       `json:"ref"`
-	Event        string       `json:"event"`
-	Status       string       `json:"status"`
-	StartTime    time.Time    `json:"startTime"`
-	CloseTime    *time.Time   `json:"closeTime,omitempty"`
-	Duration     float64      `json:"duration,omitempty"`
-	PipelineName string       `json:"pipelineName,omitempty"`
-	Steps        []stepBrief  `json:"steps,omitempty"`
+	WorkflowID   string      `json:"workflowId"`
+	RunID        string      `json:"runId"`
+	Repo         string      `json:"repo"`
+	Ref          string      `json:"ref"`
+	Event        string      `json:"event"`
+	Status       string      `json:"status"`
+	StartTime    time.Time   `json:"startTime"`
+	CloseTime    *time.Time  `json:"closeTime,omitempty"`
+	Duration     float64     `json:"duration,omitempty"`
+	PipelineName string      `json:"pipelineName,omitempty"`
+	Steps        []stepBrief `json:"steps,omitempty"`
 }
 
 type stepBrief struct {
@@ -56,19 +56,19 @@ type buildDetail struct {
 }
 
 type repoStatus struct {
-	Repo          string         `json:"repo"`
-	DefaultBranch string         `json:"defaultBranch"`
-	LatestBuild   *buildSummary  `json:"latestBuild,omitempty"`
-	RecentBuilds  []string       `json:"recentBuilds"`
-	Pipelines     []string       `json:"pipelines,omitempty"`
+	Repo          string        `json:"repo"`
+	DefaultBranch string        `json:"defaultBranch"`
+	LatestBuild   *buildSummary `json:"latestBuild,omitempty"`
+	RecentBuilds  []string      `json:"recentBuilds"`
+	Pipelines     []string      `json:"pipelines,omitempty"`
 }
 
 type analyticsResult struct {
-	SuccessRate  float64         `json:"successRate"`
-	AvgDuration  float64         `json:"avgDuration"`
-	BuildCount   int             `json:"buildCount"`
-	FailingSteps []stepCount     `json:"failingSteps"`
-	SlowestSteps []stepDuration  `json:"slowestSteps"`
+	SuccessRate  float64        `json:"successRate"`
+	AvgDuration  float64        `json:"avgDuration"`
+	BuildCount   int            `json:"buildCount"`
+	FailingSteps []stepCount    `json:"failingSteps"`
+	SlowestSteps []stepDuration `json:"slowestSteps"`
 	DailyTrend   []dailyEntry   `json:"dailyTrend"`
 }
 
@@ -89,20 +89,20 @@ type dailyEntry struct {
 	AvgDuration float64 `json:"avgDuration"`
 }
 
-// registerCIRoutes registers all CI API routes on the default mux.
-func registerCIRoutes() {
-	http.HandleFunc("/api/ci/builds", readAuth(handleCIBuilds))
-	http.HandleFunc("/api/ci/builds/", readAuth(handleCIBuildDetail))
-	http.HandleFunc("/api/ci/repos", readAuth(handleCIRepos))
-	http.HandleFunc("/api/ci/repos/", handleCIRepoBadge)
-	http.HandleFunc("/api/ci/analytics", readAuth(handleCIAnalytics))
-	http.HandleFunc("/api/ci/notifications", readAuth(handleCINotifications))
-	http.HandleFunc("/api/ci/notifications/read", authMiddleware(handleCINotificationsRead))
+// registerCIRoutes registers the dashboard API and GitHub OAuth routes.
+func registerCIRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/ci/builds", readAuth(handleCIBuilds))
+	mux.HandleFunc("/api/ci/builds/", readAuth(handleCIBuildDetail))
+	mux.HandleFunc("/api/ci/repos", readAuth(handleCIRepos))
+	mux.HandleFunc("/api/ci/repos/", handleCIRepoBadge)
+	mux.HandleFunc("/api/ci/analytics", readAuth(handleCIAnalytics))
+	mux.HandleFunc("/api/ci/notifications", readAuth(handleCINotifications))
+	mux.HandleFunc("/api/ci/notifications/read", authMiddleware(handleCINotificationsRead))
 
-	http.HandleFunc("/auth/github", handleAuthGitHub)
-	http.HandleFunc("/auth/github/callback", handleAuthCallback)
-	http.HandleFunc("/auth/me", handleAuthMe)
-	http.HandleFunc("/auth/logout", handleAuthLogout)
+	mux.HandleFunc("/auth/github", handleAuthGitHub)
+	mux.HandleFunc("/auth/github/callback", handleAuthCallback)
+	mux.HandleFunc("/auth/me", handleAuthMe)
+	mux.HandleFunc("/auth/logout", handleAuthLogout)
 }
 
 func handleCIBuilds(w http.ResponseWriter, r *http.Request) {
@@ -112,10 +112,7 @@ func handleCIBuilds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	limit := 50
-	if l, err := strconv.Atoi(q.Get("limit")); err == nil && l > 0 && l <= 200 {
-		limit = l
-	}
+	limit := parseBuildLimit(q.Get("limit"))
 
 	query := "WorkflowType='CIPipeline'"
 	if repo := q.Get("repo"); repo != "" {
@@ -179,6 +176,13 @@ func handleCIBuilds(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(builds)
+}
+
+func parseBuildLimit(value string) int {
+	if limit, err := strconv.Atoi(value); err == nil && limit > 0 && limit <= 200 {
+		return limit
+	}
+	return 50
 }
 
 func handleCIBuildDetail(w http.ResponseWriter, r *http.Request) {

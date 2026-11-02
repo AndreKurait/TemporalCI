@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -38,8 +39,17 @@ func main() {
 		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
-		slog.Info("metrics server starting", "port", "9090")
-		if err := http.ListenAndServe(":9090", nil); err != nil {
+		host := os.Getenv("METRICS_HOST")
+		if host == "" {
+			host = "127.0.0.1"
+		}
+		server := &http.Server{
+			Addr:              net.JoinHostPort(host, "9090"),
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
+		slog.Info("metrics server starting", "address", server.Addr)
+		if err := server.ListenAndServe(); err != nil {
 			slog.Error("metrics server failed", "error", err)
 		}
 	}()

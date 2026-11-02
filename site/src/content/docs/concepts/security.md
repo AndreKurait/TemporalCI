@@ -1,20 +1,22 @@
 ---
 title: Security Model
-description: How TemporalCI secures CI execution, secrets, and infrastructure access.
+description: Security boundaries and limitations of the TemporalCI proof of concept.
 ---
 
 ## Principles
 
-1. **Zero stored credentials** — OIDC federation for AWS, no long-lived keys
-2. **Least privilege** — each component gets only the permissions it needs
-3. **Isolation** — CI pods can't access the cluster or other workloads
-4. **Defense in depth** — RBAC + network policies + pod security
+TemporalCI is a POC for trusted repositories and disposable environments. It is not a hardened multi-tenant runner. Review effective permissions, network policy enforcement, and secret handling before deploying an experiment.
+
+1. **Explicit operators** — GitHub OAuth plus an allowlist gates management.
+2. **Private defaults** — native listeners use loopback and Helm uses ClusterIP services by default.
+3. **Scoped credentials** — choose narrowly scoped permissions for each experiment.
+4. **Known limits** — workflow history, workspace persistence, and pod isolation need further hardening.
 
 ## Authentication Layers
 
 ### GitHub → AWS (OIDC)
 
-GitHub Actions authenticates to AWS using OpenID Connect federation. No AWS access keys are stored anywhere:
+The deployment workflow can authenticate to AWS using OpenID Connect federation, avoiding a long-lived AWS key for that specific integration:
 
 ```
 GitHub Actions → OIDC token → AWS STS AssumeRoleWithWebIdentity → temporary credentials
@@ -34,11 +36,19 @@ In production, pods authenticate to AWS via [EKS Pod Identity](https://docs.aws.
 
 ### Webhook Validation
 
-Every GitHub webhook is validated using HMAC-SHA256 signature verification before any workflow is started.
+GitHub webhooks require HMAC-SHA256 signature verification before any workflow is started. A missing webhook secret rejects requests.
+
+### Browser and Management Access
+
+GitHub OAuth requires `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_ALLOWED_USERS`. The last variable is a comma-separated operator allowlist; an empty list grants no access. OAuth state is browser-bound, expires after ten minutes, and can be used once.
+
+Management APIs and custom triggers require an allowed operator. Build reads are private by default. `PUBLIC_READ=true` explicitly exposes build metadata, parameters, and log links. Public badges expose build status and whether a repository is registered independently of this setting. Cookies are secure by default; the loopback HTTP development opt-out is `SESSION_COOKIE_SECURE=false`.
+
+Sessions live in memory and disappear on restart. The POC does not implement per-repository roles or shared session storage for multiple replicas.
 
 ## CI Pod Isolation
 
-CI pods are untrusted by default — they run arbitrary user code.
+Pipeline commands execute user-supplied code. Run only repositories you trust. A worker outside Kubernetes can execute commands directly on its host.
 
 ### RBAC
 
@@ -52,18 +62,18 @@ metadata:
 rules: []  # No permissions
 ```
 
-CI pods cannot list pods, read secrets, or access any K8s API.
+Verify the service account's effective bindings in your cluster; the chart alone cannot establish a tenant isolation guarantee.
 
 ### Network Policies
 
-CI pods are network-isolated:
+The chart includes an optional network policy, disabled by default. When enabled and enforced by the cluster's CNI, it is intended to provide:
 
 - **No inbound traffic** — nothing can connect to CI pods
 - **Egress: DNS allowed** — pods can resolve hostnames
 - **Egress: HTTPS allowed** — pods can pull dependencies from the internet
 - **Egress: cluster-internal blocked** — 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 are denied
 
-This prevents a compromised CI pod from attacking Temporal, the K8s API, or other cluster services.
+Review the rendered rules and your network topology before relying on this policy. Keep Temporal, its database, and other control services private.
 
 ## Secrets Management
 
@@ -77,6 +87,8 @@ Secrets are stored in AWS Secrets Manager and mounted into pods via the Secrets 
 | `temporalci/github-token` | Worker — GitHub API access |
 
 RDS credentials are managed by ACK and stored as K8s Secrets automatically.
+
+Fetched secrets and assumed-role credentials can appear in activity arguments or results and therefore in Temporal history. Log masking does not remove them from history. Do not use production credentials with this POC; protecting or redesigning credential delivery requires additional work.
 
 ### Local
 

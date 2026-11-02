@@ -28,6 +28,11 @@ spec:
               containerPort: 9090
               protocol: TCP
           env:
+            # Metrics stay within the cluster; no external Service is created.
+            - name: METRICS_HOST
+              value: "0.0.0.0"
+            - name: PRIVILEGED_REPOS
+              value: {{ join "," .Values.worker.privilegedRepos | quote }}
             - name: TEMPORAL_HOST_PORT
               value: "{{ .Release.Name }}-frontend:7233"
             - name: TEMPORAL_WEB_URL
@@ -68,7 +73,7 @@ spec:
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
+                  name: {{ include "temporalci.localSecretName" . }}
                   key: github-token
             {{- end }}
           {{- if .Values.githubApp.enabled }}

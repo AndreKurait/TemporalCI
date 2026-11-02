@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/google/go-github/v70/github"
@@ -71,33 +72,51 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 		return CloneResult{}, fmt.Errorf("git clone: %w", err)
 	}
 
-	result := CloneResult{Dir: dir}
+	if input.SkipPipelineConfig {
+		return CloneResult{Dir: dir}, nil
+	}
+	return loadSelectedPipeline(dir, input)
+}
 
+// loadSelectedPipeline selects only pipelines whose triggers match the event.
+// It is separate from cloning so selection can be tested without network access.
+func loadSelectedPipeline(dir string, input CloneInput) (CloneResult, error) {
+	result := CloneResult{Dir: dir}
 	pCfg, err := config.LoadPipelineConfig(dir)
 	if err != nil {
-		return result, nil
+		return result, err
 	}
 
-	// Determine which pipeline to use
 	pipelines := pCfg.GetPipelines()
-	for name := range pipelines {
-		result.Pipelines = append(result.Pipelines, name)
+	if input.PipelineName != "" && pipelines[input.PipelineName] == nil {
+		return result, fmt.Errorf("pipeline %q not found", input.PipelineName)
 	}
-
-	pipelineName := input.PipelineName
-	if pipelineName == "" {
-		pipelineName = "default"
-	}
-
-	p, ok := pipelines[pipelineName]
-	if !ok {
-		// Fall back to first pipeline
-		for _, pp := range pipelines {
-			p = pp
-			break
+	for name, p := range pipelines {
+		if input.PipelineName != "" && input.PipelineName != name {
+			continue
+		}
+		// Explicit operator/child requests select a pipeline directly. Automatic
+		// events, including named scheduled runs, must satisfy its triggers.
+		explicit := input.PipelineName != "" && (input.Event == "manual" || input.Event == "pipeline")
+		if input.Event == "" || explicit || p.ShouldRunForEvent(input.Event, input.Ref, input.Payload, input.ChangedFiles, input.Labels) {
+			result.Pipelines = append(result.Pipelines, name)
 		}
 	}
+	sort.Strings(result.Pipelines)
+	if len(result.Pipelines) == 0 {
+		result.Skipped = true
+		return result, nil
+	}
+	if len(result.Pipelines) > 1 {
+		return result, nil // the workflow dispatches these matching pipelines
+	}
 
+	result.PipelineName = result.Pipelines[0]
+	p := pipelines[result.PipelineName]
+	result.Parameters, err = config.ResolveParameters(p.Parameters, input.Parameters)
+	if err != nil {
+		return result, err
+	}
 	if p != nil {
 		for _, s := range p.Steps {
 			sc := convertStepConfig(s)
@@ -120,6 +139,11 @@ func (a *Activities) CloneRepo(ctx context.Context, input CloneInput) (CloneResu
 
 // RunStep executes a single CI step as a K8s pod or locally.
 func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepResult, error) {
+	// Enforce the same policy before selecting either execution backend.
+	if (input.Privileged || input.Docker) && !a.PrivilegedRepos[input.Repo] {
+		return RunStepResult{}, fmt.Errorf("repo %q is not allowed to use privileged mode", input.Repo)
+	}
+	defer startStepHeartbeat(ctx)()
 	log := a.logger(ctx).With("step", input.Name, "image", input.Image)
 	log.Info("running step")
 
@@ -130,11 +154,6 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 }
 
 func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunStepResult, error) {
-	// Enforce privileged allowlist
-	if input.Privileged && len(a.PrivilegedRepos) > 0 && !a.PrivilegedRepos[input.Repo] {
-		return RunStepResult{}, fmt.Errorf("repo %q is not allowed to use privileged mode", input.Repo)
-	}
-
 	metrics.PodsActive.Inc()
 	defer metrics.PodsActive.Dec()
 
@@ -479,9 +498,9 @@ func convertStepConfig(s config.StepConfig) StepConfig {
 	}
 	if s.Matrix != nil {
 		sc.Matrix = &MatrixConfig{
-			Dimensions: s.Matrix.Dimensions,
-			Exclude:    s.Matrix.Exclude,
-			Include:    s.Matrix.Include,
+			Dimensions:  s.Matrix.Dimensions,
+			Exclude:     s.Matrix.Exclude,
+			Include:     s.Matrix.Include,
 			MaxParallel: s.Matrix.MaxParallel,
 		}
 		if s.Matrix.FailFast != nil {

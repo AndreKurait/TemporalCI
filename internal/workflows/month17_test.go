@@ -9,7 +9,7 @@ import (
 
 // --- Month 17: Release pipeline, credential chaining, analytics ---
 
-func TestDepsOK(t *testing.T) {
+func TestDepsOK_AllDependencies(t *testing.T) {
 	completed := map[string]bool{"build": true, "test": true}
 	if !depsOK([]string{"build", "test"}, completed) {
 		t.Error("all deps completed, should be OK")
@@ -46,8 +46,8 @@ func TestResolveDynamicMatrix_ChainedOutputs(t *testing.T) {
 
 func TestBuildStepSecrets_WithAWSCreds(t *testing.T) {
 	resolved := map[string]string{
-		"DOCKER_PASSWORD":     "secret",
-		"AWS_ACCESS_KEY_ID":   "AKIA...",
+		"DOCKER_PASSWORD":       "secret",
+		"AWS_ACCESS_KEY_ID":     "AKIA...",
 		"AWS_SECRET_ACCESS_KEY": "secret",
 	}
 	step := activities.StepConfig{

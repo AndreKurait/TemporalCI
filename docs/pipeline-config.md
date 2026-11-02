@@ -17,6 +17,8 @@ Each file defines a single pipeline with triggers, steps, parameters, and post h
 
 The `on` block controls when a pipeline runs. Omit `on` to run on every event.
 
+Automatic events dispatch only matching pipelines, in name order. No matches produce a skipped run before steps or secrets are used. An explicit manual request for a named pipeline or a `trigger` step selects that pipeline directly; an unknown name fails rather than falling back to another pipeline. A manual request without a name selects webhook-enabled pipelines (and pipelines without an `on` block).
+
 ```yaml
 on:
   push:
@@ -50,6 +52,8 @@ on:
 ### Path Filtering
 
 Push and PR triggers support `paths` to skip pipelines when no relevant files changed. Patterns: exact paths, `src/**` (recursive), `*.go` (extension), `docs/*` (single level).
+
+Path filters require a supplied changed-file list. Push events use the files present in the webhook's commits; an omitted or truncated list can skip a relevant pipeline. The current PR webhook parser does not retrieve changed files, so a PR pipeline with `paths` is skipped until that metadata is supplied. PR branch filters use the target branch from the event payload, and every configured label must be present.
 
 ```yaml
 on:
@@ -149,6 +153,10 @@ matrix:
 
 Matrix variables are available as env vars (`$go`, `$os`).
 
+A failed matrix child always fails the parent pipeline and prevents steps depending on that matrix from running. `fail_fast` requests cancellation of outstanding children and stops scheduling more combinations after a failure is observed; it does not make failures optional. With `fail_fast: false`, other combinations and independent steps continue.
+
+Cancellation is not a guarantee that an already-running shell command or Kubernetes pod has stopped. `RunStep` records a heartbeat immediately and every 30 seconds while running, keeping the activity alive and allowing cancellation delivery. The SDK may throttle heartbeat delivery, and cancellation remains cooperative; local shell subprocesses need additional process-tree cancellation handling. Confirm workload termination separately before reusing resources or credentials after a cancelled run.
+
 ### Dynamic Matrix
 
 Generate matrix dimensions at runtime from a command's JSON output:
@@ -210,6 +218,8 @@ Enable Docker socket access for steps that build/push images:
 ## Privileged Mode
 
 Run a step container in privileged mode (required for some build tools):
+
+The instance operator must add the repository to `PRIVILEGED_REPOS` (`worker.privilegedRepos` in Helm). An empty list denies privileged containers, including the sidecar created by `docker: true`.
 
 ```yaml
 - name: build

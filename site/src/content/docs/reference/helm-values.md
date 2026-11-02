@@ -101,9 +101,13 @@ temporal:
 postgresql:
   enabled: true             # Disable when using RDS
   auth:
-    postgresPassword: temporal
+    existingSecret: temporalci-database
+    secretKeys:
+      adminPasswordKey: postgres-password
     database: temporal
 ```
+
+Create the `temporalci-database` Secret before deploying; the local setup script creates it automatically. Temporal's SQL stores use the same Secret and key.
 
 ## Example: Local Development
 

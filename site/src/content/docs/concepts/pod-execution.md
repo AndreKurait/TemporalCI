@@ -70,9 +70,9 @@ spec:
     temporalci/pool: ci-jobs
   containers:
     - name: step
-      image: golang:1.23          # from .temporalci.yaml
+      image: golang:1.23          # from .temporalci/default.yaml
       command: ["sh", "-c"]
-      args: ["go test ./..."]     # from .temporalci.yaml
+      args: ["go test ./..."]     # from .temporalci/default.yaml
       resources:
         requests: { cpu: "500m", memory: "512Mi" }
         limits:   { cpu: "2",    memory: "2Gi" }
@@ -87,12 +87,12 @@ spec:
 
 ## Security
 
-CI pods are locked down by default:
+CI pods are a POC execution mechanism, not a tenant isolation boundary:
 
-- **Zero K8s API access** — the `temporalci-ci-job` ServiceAccount has no RBAC permissions
-- **Network isolation** — NetworkPolicy blocks all inbound traffic and egress to cluster-internal IPs (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Only DNS and HTTPS egress allowed
-- **No host access** — no hostPath mounts, no privileged containers
-- **Ephemeral** — pods are deleted immediately after the step completes
+- The `temporalci-ci-job` ServiceAccount has no RBAC permissions in the supplied chart. Review any permissions added by your environment.
+- NetworkPolicy is optional and requires a CNI that enforces it. It is disabled in the base and local values.
+- `privileged: true` and `docker: true` require an explicit repository entry in `PRIVILEGED_REPOS` (`worker.privilegedRepos` in Helm). Docker-in-Docker uses a privileged sidecar.
+- Pod deletion is best effort. Worker termination or Kubernetes API failures can leave resources behind.
 
 ## Local vs Production
 

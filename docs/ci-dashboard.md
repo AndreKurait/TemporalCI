@@ -29,11 +29,13 @@ GitHub OAuth, handled by the webhook server:
 | `/auth/me` | GET | Returns current user (login, name, avatar) |
 | `/auth/logout` | POST | Clears session |
 
-Sessions are stored in-memory with 7-day expiry. Cookies are `HttpOnly`, `SameSite=Lax`.
+Configure `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and a comma-separated `GITHUB_ALLOWED_USERS` operator allowlist. No users are allowed by default. OAuth state expires after ten minutes and is bound to the initiating browser.
+
+Sessions are stored in-memory with 7-day expiry. Cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` by default. For isolated loopback HTTP development only, set `SESSION_COOKIE_SECURE=false`. Restarting the process invalidates all sessions.
 
 ### PUBLIC_READ Mode
 
-Set `PUBLIC_READ=true` to allow unauthenticated read access to CI API endpoints. Write operations (marking notifications read) still require authentication.
+Build reads are private by default. Set `PUBLIC_READ=true` only when build metadata, parameters, and log links are intended to be public. Management endpoints (including repository configuration and manual/custom triggers) and write operations always require an allowed operator.
 
 ## API Endpoints
 
@@ -82,7 +84,7 @@ ciDashboard:
   enabled: true
   replicas: 1
   port: 3000
-  publicRead: true
+  publicRead: false
   resources:
     requests:
       cpu: 50m
@@ -93,9 +95,14 @@ ciDashboard:
 
 githubOAuth:
   clientId: "your-github-oauth-app-id"
-  clientSecret: "your-github-oauth-app-secret"
-  sessionSecret: "random-secret-for-sessions"
+  existingSecret: "temporalci-oauth"
+  allowedUsers: ["your-github-login"]
+  secureCookies: true
 ```
+
+Provide the OAuth client secret in the Kubernetes Secret named by `githubOAuth.existingSecret`, under `github-oauth-secret`; do not commit it in values files. The chart does not create this key for you. If `existingSecret` is unset, it uses `<release>-secrets`. Use an HTTPS proxy and a callback URL ending in `/auth/github/callback`.
+
+Allowed operators can manage the entire POC instance. This is not per-repository authorization. See [SECURITY.md](../SECURITY.md) for remaining limitations.
 
 The helm chart creates:
 - A `Deployment` running the `temporalci-dashboard` image

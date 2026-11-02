@@ -1,11 +1,11 @@
 ---
 title: Quick Start
-description: Get TemporalCI running on minikube in 5 minutes.
+description: Build and explore the TemporalCI proof of concept locally.
 ---
 
 import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Get TemporalCI running locally and trigger your first CI pipeline.
+Build TemporalCI locally and explore a CI pipeline in a disposable environment. This is a proof of concept for repositories you trust.
 
 ## Prerequisites
 
@@ -14,7 +14,8 @@ Before you start, make sure you have:
 - [minikube](https://minikube.sigs.k8s.io/docs/start/) (v1.32+)
 - [Helm 3](https://helm.sh/docs/intro/install/) (v3.14+)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
-- A GitHub repo to test with
+- Docker and OpenSSL
+- A public GitHub repo you control to test with
 
 <Aside type="tip">
 No AWS account needed. Everything runs locally on minikube.
@@ -24,85 +25,52 @@ No AWS account needed. Everything runs locally on minikube.
 
 <Steps>
 
-1. **Start minikube**
-
-   ```bash
-   minikube start --cpus=4 --memory=4096
-   ```
-
-   Expected output:
-   ```
-   ✅ minikube v1.34.0
-   ✅ Using the docker driver
-   ✅ Starting "minikube" ...
-   ✅ kubectl is now configured to use "minikube"
-   ```
-
-2. **Clone the TemporalCI repo**
+1. **Clone the TemporalCI repo**
 
    ```bash
    git clone https://github.com/AndreKurait/TemporalCI.git
    cd TemporalCI
    ```
 
-3. **Install with Helm**
+2. **Build and start the local stack**
 
    ```bash
-   helm install temporalci ./deploy/helm -f deploy/helm/values-local.yaml
+   ./scripts/local-up.sh
    ```
 
-   Wait for all pods to be ready (~2 minutes):
-   ```bash
-   kubectl get pods -w
-   ```
+   The script builds and loads the image, registers Helm repositories, creates fresh development secrets when absent, and installs into the `temporalci` namespace. A new cluster defaults to 8 CPUs and 16 GiB RAM; see the [local development guide](/TemporalCI/getting-started/local-dev/) to customize it.
 
-   You should see:
-   ```
-   NAME                                    READY   STATUS    RESTARTS
-   temporalci-temporal-frontend-0          1/1     Running   0
-   temporalci-temporal-history-0           1/1     Running   0
-   temporalci-temporal-matching-0          1/1     Running   0
-   temporalci-temporal-worker-0            1/1     Running   0
-   temporalci-worker-6d4f8b9c7-xxxxx      1/1     Running   0
-   temporalci-webhook-7b5c9d8e6-xxxxx     1/1     Running   0
-   temporalci-postgresql-0                 1/1     Running   0
-   ```
-
-4. **Create secrets**
+3. **Inspect readiness**
 
    ```bash
-   kubectl create secret generic temporalci-secrets \
-     --from-literal=github-webhook-secret=dev-secret \
-     --from-literal=github-token=ghp_YOUR_TOKEN_HERE
+   kubectl get pods -n temporalci
    ```
 
-   <Aside type="note">
-   Replace `ghp_YOUR_TOKEN_HERE` with a [GitHub personal access token](https://github.com/settings/tokens) that has `repo` and `statuses` permissions.
-   </Aside>
+   Startup time depends on downloads and cluster resources. The local setup deliberately leaves GitHub API credentials empty; add scoped credentials only if you need remote status reporting.
 
 </Steps>
 
 ## Add a Pipeline to Your Repo
 
-Create `.temporalci.yaml` in your repository root:
+Create `.temporalci/default.yaml` in your repository root:
 
 <Tabs>
   <TabItem label="Go">
 ```yaml
 steps:
   - name: build
-    image: golang:1.23
+    image: golang:1.26
     command: go build ./...
     timeout: 5m
 
   - name: test
-    image: golang:1.23
+    image: golang:1.26
     command: go test -v ./...
     timeout: 5m
     depends_on: [build]
 
   - name: vet
-    image: golang:1.23
+    image: golang:1.26
     command: go vet ./...
     depends_on: [build]
 ```
@@ -111,17 +79,17 @@ steps:
 ```yaml
 steps:
   - name: install
-    image: node:20
+    image: node:24
     command: npm ci
 
   - name: test
-    image: node:20
-    command: npm test
+    image: node:24
+    command: npm ci && npm test
     depends_on: [install]
 
   - name: build
-    image: node:20
-    command: npm run build
+    image: node:24
+    command: npm ci && npm run build
     depends_on: [install]
 ```
   </TabItem>
@@ -134,73 +102,69 @@ steps:
 
   - name: test
     image: python:3.12
-    command: python -m pytest
+    command: pip install -r requirements.txt pytest && python -m pytest
     depends_on: [install]
 
   - name: lint
     image: python:3.12
-    command: ruff check .
+    command: pip install ruff && ruff check .
     depends_on: [install]
 ```
   </TabItem>
 </Tabs>
 
+Each Kubernetes step gets a fresh checkout. Install its dependencies in that step; `depends_on` controls ordering and success conditions, and does not share the previous container filesystem.
+
+From your test repository's checkout, commit and push the pipeline so the worker can fetch it:
+
+```bash
+git add .temporalci/default.yaml
+git commit -m "Add a TemporalCI pipeline"
+git push origin HEAD
+```
+
+The trigger example below uses `main`. Replace it with the branch you just pushed if different. Uncommitted or unpushed files are not included in the worker's clone.
+
 ## Connect GitHub
 
-Set up the webhook so GitHub notifies TemporalCI on every push:
+Start with a signed local test request:
 
 <Steps>
 
-1. **Expose the webhook server** (for local testing):
+1. **Forward the webhook server to loopback**:
 
    ```bash
-   kubectl port-forward svc/temporalci-webhook 8080:8080
+   kubectl port-forward svc/temporalci-webhook -n temporalci 8080:8080
    ```
 
-2. **Register your repo**:
+2. **Send a signed event in another terminal**:
 
    ```bash
-   curl -X POST http://localhost:8080/api/repos \
-     -H "Content-Type: application/json" \
-     -d '{"fullName": "your-org/your-repo", "defaultBranch": "main"}'
+   ./scripts/local-trigger.sh your-org/your-repo main
    ```
 
-   Or configure manually in GitHub → Settings → Webhooks:
-   - **Payload URL:** your webhook endpoint
-   - **Content type:** `application/json`
-   - **Secret:** `dev-secret` (matches the secret you created above)
-   - **Events:** Pushes and Pull requests
+   The helper reads the generated local webhook secret and signs the payload. An accepted signed GitHub event registers the repository automatically. Manual management APIs require an allowed OAuth operator.
 
 </Steps>
 
 ## Trigger a Build
 
-Push a commit or open a PR. TemporalCI will:
+The local test event asks TemporalCI to:
 
 1. Receive the webhook event
 2. Start a Temporal workflow
-3. Clone your repo and read `.temporalci.yaml`
+3. Clone your repo and read `.temporalci/default.yaml`
 4. Run each step as an isolated K8s pod
-5. Report results back to your PR
+5. Attempt GitHub reporting if credentials are configured
 
-You'll see results on your PR:
+For real GitHub deliveries, configure an HTTPS webhook endpoint and the matching secret through your own deployment. A localhost port-forward is not reachable by GitHub. Review the [security model](/TemporalCI/concepts/security/) before accepting pull-request builds.
 
-```markdown
-## TemporalCI Results — abc1234
-
-✅ build (12.5s)
-✅ test (20.2s)
-✅ vet (3.1s)
-
-3 passed, 0 failed in 35.8s
-
-🔗 View workflow in Temporal UI
-```
+Inspect this local run in the Temporal Web UI below. The synthetic push is not a pull-request event and does not supply a commit SHA, so it does not demonstrate PR comments or commit status reporting. Those require a real event with the corresponding metadata and scoped GitHub credentials.
 
 ## View the Temporal Web UI
 
 ```bash
-kubectl port-forward svc/temporalci-temporal-web 8088:8088
+kubectl port-forward svc/temporalci-web -n temporalci 8088:8080
 ```
 
 Open [http://localhost:8088](http://localhost:8088) to see your workflow executions, activity details, and timing.
@@ -214,24 +178,21 @@ git push → GitHub Webhook → Webhook Server → Temporal Workflow
                                               │  CloneRepo │
                                               └─────┬─────┘
                                               ┌─────┴─────┐
-                                         ┌────┤  RunStep   ├────┐
-                                         │    └───────────┘    │
-                                    ┌────┴────┐          ┌────┴────┐
-                                    │  build   │          │  vet    │
-                                    └────┬────┘          └─────────┘
-                                    ┌────┴────┐
-                                    │  test    │
-                                    └────┬────┘
-                                    ┌────┴────────┐
-                                    │ ReportResults│
-                                    └─────────────┘
+                                              │ RunStep   │
+                                              │ build     │
+                                              │ test      │
+                                              │ vet       │
+                                              └─────┬─────┘
+                                            ┌───────┴───────┐
+                                            │ ReportResults │
+                                            └───────────────┘
 ```
 
-If anything crashes mid-pipeline, Temporal replays the workflow and resumes from the last completed activity. No lost work.
+Temporal can replay workflow decisions after a worker restart. Worker-local checkout files and running commands are not preserved by replay, and regular build steps currently have one attempt. Treat restart recovery as an area to evaluate in this POC, not a build-survival guarantee.
 
 ## Next Steps
 
-- [Pipeline Configuration](/TemporalCI/configuration/pipeline/) — full `.temporalci.yaml` reference
+- [Pipeline Configuration](/TemporalCI/configuration/pipeline/) — full `.temporalci/default.yaml` reference
 - [Local Development](/TemporalCI/getting-started/local-dev/) — development workflow tips
 - [Architecture Overview](/TemporalCI/architecture/overview/) — how the system works
-- [EKS Deployment](/TemporalCI/production/eks-deployment/) — deploy to production
+- [EKS Deployment](/TemporalCI/production/eks-deployment/) — experimental infrastructure configuration

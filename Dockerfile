@@ -1,13 +1,11 @@
 FROM golang:1.26-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /app
-ENV GONOSUMCHECK=* GONOSUMDB=* GOINSECURE=* GOPROXY=direct GOFLAGS=-insecure
-COPY go.mod ./
-RUN go mod download 2>/dev/null || true
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN go mod tidy
-RUN CGO_ENABLED=0 go build -o /worker ./cmd/worker
-RUN CGO_ENABLED=0 go build -o /webhook ./cmd/webhook
+RUN CGO_ENABLED=0 go build -mod=readonly -o /worker ./cmd/worker
+RUN CGO_ENABLED=0 go build -mod=readonly -o /webhook ./cmd/webhook
 
 FROM golang:1.26-alpine
 ARG TARGETARCH
