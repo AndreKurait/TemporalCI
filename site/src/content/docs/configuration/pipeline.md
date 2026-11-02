@@ -1,9 +1,9 @@
 ---
-title: Pipeline Config (.temporalci.yaml)
-description: Configure CI pipelines with .temporalci.yaml in your repository.
+title: Pipeline Config (.temporalci/default.yaml)
+description: Configure CI pipelines with .temporalci/default.yaml in your repository.
 ---
 
-TemporalCI reads `.temporalci.yaml` from the root of your repository to define the CI pipeline.
+TemporalCI reads `.yaml` files from the `.temporalci/` directory. Each filename defines a named pipeline; the examples below can be saved as `.temporalci/default.yaml`. A root-level `.temporalci.yaml` file is not read by the current parser.
 
 ## Format
 
@@ -39,7 +39,7 @@ steps:
 
 ## DAG Execution
 
-Steps with `depends_on` form a directed acyclic graph. Independent steps run in parallel. If a dependency fails, downstream steps are skipped.
+Steps with `depends_on` form a directed acyclic graph, but the current regular-step executor processes the declared list sequentially. Put each dependency before its dependents. If a dependency fails, downstream steps are skipped. Concurrency is implemented for matrix and named-pipeline child workflows.
 
 ```yaml
 steps:
@@ -63,21 +63,11 @@ steps:
     depends_on: [unit-test]
 ```
 
-In this example, `unit-test` and `lint` run in parallel after `build`. `integration-test` waits for `unit-test`.
+In this example, `unit-test` and `lint` both depend on `build`, but execute in declaration order. `integration-test` requires `unit-test` to have passed.
 
-## Default Pipeline
+## Validation
 
-If no `.temporalci.yaml` is found, TemporalCI uses:
-
-```yaml
-steps:
-  - name: build
-    image: golang:1.23
-    command: go build ./...
-  - name: test
-    image: golang:1.23
-    command: go test ./...
-```
+Run `go run ./cmd/validate /path/to/repository` from the TemporalCI checkout to validate your pipeline directory without executing it. The validator rejects a missing or empty `.temporalci/` directory.
 
 ## JUnit XML
 

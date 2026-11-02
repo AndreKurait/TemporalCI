@@ -130,8 +130,9 @@ func (a *Activities) RunStep(ctx context.Context, input RunStepInput) (RunStepRe
 }
 
 func (a *Activities) runStepK8s(ctx context.Context, input RunStepInput) (RunStepResult, error) {
-	// Enforce privileged allowlist
-	if input.Privileged && len(a.PrivilegedRepos) > 0 && !a.PrivilegedRepos[input.Repo] {
+	// Docker-in-Docker also creates a privileged container. An unset
+	// allowlist must not grant either kind of privileged execution.
+	if (input.Privileged || input.Docker) && !a.PrivilegedRepos[input.Repo] {
 		return RunStepResult{}, fmt.Errorf("repo %q is not allowed to use privileged mode", input.Repo)
 	}
 
@@ -479,9 +480,9 @@ func convertStepConfig(s config.StepConfig) StepConfig {
 	}
 	if s.Matrix != nil {
 		sc.Matrix = &MatrixConfig{
-			Dimensions: s.Matrix.Dimensions,
-			Exclude:    s.Matrix.Exclude,
-			Include:    s.Matrix.Include,
+			Dimensions:  s.Matrix.Dimensions,
+			Exclude:     s.Matrix.Exclude,
+			Include:     s.Matrix.Include,
 			MaxParallel: s.Matrix.MaxParallel,
 		}
 		if s.Matrix.FailFast != nil {

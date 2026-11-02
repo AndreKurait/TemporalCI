@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -56,36 +58,53 @@ func main() {
 		repoStore, _ = store.NewRepoStore("/tmp/repos.json")
 	}
 
-	// Rate limiter: 60 requests per minute per IP
-	limiter := middleware.NewRateLimiter(60, time.Minute)
-
-	http.HandleFunc("/webhook", middleware.AuditLog(middleware.RateLimit(limiter, handleWebhook)))
-	http.HandleFunc("/webhook/custom/", middleware.AuditLog(middleware.RateLimit(limiter, handleCustomWebhook)))
-	http.HandleFunc("/health", handleHealth)
-	http.HandleFunc("/status", handleStatus)
-	http.HandleFunc("/api/repos", middleware.AuditLog(handleRepos))
-	http.HandleFunc("/api/repos/", middleware.AuditLog(handleRepoByName))
-	http.HandleFunc("/api/trigger/", middleware.AuditLog(handleManualTrigger))
-	http.HandleFunc("/api/locks", middleware.AuditLog(handleLocks))
-	http.HandleFunc("/api/locks/", middleware.AuditLog(handleLockForceRelease))
-	http.HandleFunc("/api/lock-pools", middleware.AuditLog(handleLockPools))
-	http.HandleFunc("/api/artifacts/", middleware.AuditLog(handleArtifacts))
-	http.HandleFunc("/api/replay/", middleware.AuditLog(handleReplay))
-	http.HandleFunc("/badge/", handleBadge)
-	http.HandleFunc("/dashboard", handleDashboard)
-
-	// CI Dashboard API, auth, and notification routes
-	registerCIRoutes()
-
-	slog.Info("starting webhook server", "port", cfg.WebhookPort)
-	if err := http.ListenAndServe(":"+cfg.WebhookPort, nil); err != nil {
+	server := &http.Server{
+		Addr:              net.JoinHostPort(cfg.WebhookHost, cfg.WebhookPort),
+		Handler:           newHTTPHandler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	slog.Info("starting webhook server", "address", server.Addr)
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+func newHTTPHandler() http.Handler {
+	mux := http.NewServeMux()
+	// Rate limiter: 60 requests per minute per IP.
+	limiter := middleware.NewRateLimiter(60, time.Minute)
+
+	mux.HandleFunc("/webhook", middleware.AuditLog(middleware.RateLimit(limiter, handleWebhook)))
+	mux.HandleFunc("/webhook/custom/", middleware.AuditLog(middleware.RateLimit(limiter, authMiddleware(handleCustomWebhook))))
+	mux.HandleFunc("/health", handleHealth)
+	mux.HandleFunc("/status", handleStatus)
+	// Management endpoints can disclose configuration or execute work. They
+	// always require an allowed operator, including when PUBLIC_READ is enabled.
+	mux.HandleFunc("/api/repos", middleware.AuditLog(authMiddleware(handleRepos)))
+	mux.HandleFunc("/api/repos/", middleware.AuditLog(authMiddleware(handleRepoByName)))
+	mux.HandleFunc("/api/trigger/", middleware.AuditLog(authMiddleware(handleManualTrigger)))
+	mux.HandleFunc("/api/locks", middleware.AuditLog(authMiddleware(handleLocks)))
+	mux.HandleFunc("/api/locks/", middleware.AuditLog(authMiddleware(handleLockForceRelease)))
+	mux.HandleFunc("/api/lock-pools", middleware.AuditLog(authMiddleware(handleLockPools)))
+	mux.HandleFunc("/api/artifacts/", middleware.AuditLog(authMiddleware(handleArtifacts)))
+	mux.HandleFunc("/api/replay/", middleware.AuditLog(authMiddleware(handleReplay)))
+	mux.HandleFunc("/badge/", handleBadge)
+	mux.HandleFunc("/dashboard", authMiddleware(handleDashboard))
+
+	// CI Dashboard API, auth, and notification routes
+	registerCIRoutes(mux)
+	return http.MaxBytesHandler(mux, 25<<20)
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if webhookSecret == "" {
+		http.Error(w, "GitHub webhook secret is not configured", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -95,12 +114,10 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if webhookSecret != "" {
-		sig := r.Header.Get("X-Hub-Signature-256")
-		if !verifySignature(body, sig, webhookSecret) {
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
-			return
-		}
+	sig := r.Header.Get("X-Hub-Signature-256")
+	if !verifySignature(body, sig, webhookSecret) {
+		http.Error(w, "invalid signature", http.StatusUnauthorized)
+		return
 	}
 
 	event := r.Header.Get("X-GitHub-Event")
@@ -403,7 +420,7 @@ h1{color:#333}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font
 			slack = "✅"
 		}
 		fmt.Fprintf(w, `<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td></tr>`,
-			repo.FullName, repo.DefaultBranch, slack, repo.CreatedAt.Format("2006-01-02"))
+			html.EscapeString(repo.FullName), html.EscapeString(repo.DefaultBranch), slack, repo.CreatedAt.Format("2006-01-02"))
 	}
 	fmt.Fprint(w, `</table></body></html>`)
 }
@@ -470,6 +487,7 @@ func badgeSVG(label, status, color string) string {
 	labelWidth := len(label)*7 + 10
 	statusWidth := len(status)*7 + 10
 	totalWidth := labelWidth + statusWidth
+	label, status, color = html.EscapeString(label), html.EscapeString(status), html.EscapeString(color)
 	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="20">
   <linearGradient id="b" x2="0" y2="100%%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
   <mask id="a"><rect width="%d" height="20" rx="3" fill="#fff"/></mask>

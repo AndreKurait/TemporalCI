@@ -6,6 +6,7 @@ image:
 
 worker:
   replicas: 1
+  privilegedRepos: []
   resources:
     requests:
       cpu: 100m
@@ -29,22 +30,50 @@ webhook:
 
 temporal:
   enabled: true
-  server:
-
-temporalWeb:
-  loadBalancer:
+  cassandra:
     enabled: false
+  elasticsearch:
+    enabled: false
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+  server:
     config:
       persistence:
         default:
           driver: sql
           sql:
-            driver: postgres
+            driver: postgres12
+            host: temporalci-postgresql
+            port: 5432
+            database: temporal
+            user: postgres
+            password: ""
+            existingSecret: temporalci-database
+            secretKey: postgres-password
+        visibility:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: temporalci-postgresql
+            port: 5432
+            database: temporal_visibility
+            user: postgres
+            password: ""
+            existingSecret: temporalci-database
+            secretKey: postgres-password
+
+temporalWeb:
+  loadBalancer:
+    enabled: false
 
 postgresql:
   enabled: true
   auth:
-    postgresPassword: temporal
+    existingSecret: temporalci-database
+    secretKeys:
+      adminPasswordKey: postgres-password
     database: temporal
 
 secrets:
@@ -120,7 +149,7 @@ ciDashboard:
   enabled: false
   replicas: 1
   port: 3000
-  publicRead: true
+  publicRead: false
   resources:
     requests:
       cpu: 50m
@@ -131,5 +160,6 @@ ciDashboard:
 
 githubOAuth:
   clientId: ""
-  clientSecret: ""
-  sessionSecret: ""
+  existingSecret: ""
+  allowedUsers: []
+  secureCookies: true

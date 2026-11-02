@@ -1,4 +1,4 @@
-.PHONY: build test lint clean deploy bootstrap local-build local-up local-down local-restart local-logs-worker local-logs-webhook local-port-forward
+.PHONY: build test test-race lint check clean deploy bootstrap helm-dependencies local-build local-up local-down local-restart local-logs-worker local-logs-webhook local-port-forward dashboard-install dashboard-build dashboard-dev docker-build-dashboard docker-build-all
 
 build:
 	go build ./...
@@ -6,8 +6,13 @@ build:
 test:
 	go test ./... -v
 
+test-race:
+	go test -race ./...
+
 lint:
 	go vet ./...
+
+check: build lint test-race
 
 clean:
 	rm -rf /tmp/ci
@@ -30,11 +35,14 @@ local-build:
 	minikube image load localhost:5000/temporalci:local
 	minikube ssh "docker push localhost:5000/temporalci:local"
 
-local-up: local-build
-	helm dependency build deploy/helm 2>/dev/null || true
-	helm upgrade --install temporalci deploy/helm \
-		-n temporalci --create-namespace \
-		-f deploy/helm/values-local.yaml
+helm-dependencies:
+	helm repo add temporalci-temporal https://go.temporal.io/helm-charts
+	helm repo add temporalci-bitnami https://charts.bitnami.com/bitnami
+	helm repo add temporalci-localstack https://localstack.github.io/helm-charts
+	helm dependency build deploy/helm
+
+local-up:
+	./scripts/local-up.sh
 
 local-down:
 	helm uninstall temporalci -n temporalci 2>/dev/null || true
@@ -52,7 +60,7 @@ local-logs-webhook:
 local-port-forward:
 	@echo "Temporal Web UI: http://localhost:8088"
 	@echo "Webhook:         http://localhost:8080"
-	kubectl port-forward svc/temporalci-temporal-web -n temporalci 8088:8088 &
+	kubectl port-forward svc/temporalci-web -n temporalci 8088:8080 &
 	kubectl port-forward svc/temporalci-webhook -n temporalci 8080:8080 &
 
 # --- CI Dashboard ---

@@ -24,7 +24,7 @@ GitHub webhook → Webhook Server → Temporal Server → Worker → K8s Pods
 2. Webhook server validates the HMAC signature
 3. Webhook server starts a `CIPipeline` Temporal workflow
 4. Worker picks up the workflow from the task queue
-5. Worker clones the repo, reads `.temporalci.yaml`
+5. Worker clones the repo, reads `.temporalci/default.yaml`
 6. Worker creates K8s pods for each step (respecting DAG dependencies)
 7. Worker streams pod logs and collects exit codes
 8. Worker uploads full logs to S3 with presigned URLs
@@ -50,7 +50,7 @@ internal/
   workflows/       # CIPipeline, ClusterPool, HelmTestPipeline
   activities/      # CloneRepo, RunStep, ReportResults, UploadLog
   k8s/             # Pod creation, log streaming, cleanup
-  config/          # App config + .temporalci.yaml parser
+  config/          # App config + .temporalci/default.yaml parser
 deploy/
   helm/            # Umbrella Helm chart (Temporal + PostgreSQL subcharts)
   terraform/       # EKS, ECR, IAM, OIDC provider
@@ -60,6 +60,6 @@ deploy/
 
 - **Temporal for orchestration** — workflows are plain Go functions with full replay semantics
 - **K8s pods for isolation** — each CI step gets its own pod, image, and resource limits
-- **EKS Auto Mode for compute** — nodes provisioned on demand, no idle capacity
+- **EKS Auto Mode for compute** — optional node provisioning for the EKS experiment
 - **ArgoCD for deployment** — push to main → ECR → ArgoCD syncs
-- **OIDC for auth** — GitHub Actions → AWS IAM, no stored credentials
+- **OIDC for AWS deployment auth** — GitHub Actions can obtain temporary AWS credentials; GitHub/OAuth secrets and credentials in workflow history still require protection

@@ -1,6 +1,6 @@
 ---
 title: TemporalCI
-description: Kubernetes-native CI built on Temporal. Durable workflows, isolated pod execution, one Helm chart.
+description: A proof of concept for CI orchestration with Temporal and Kubernetes.
 template: splash
 pagefind: false
 hero:
@@ -25,9 +25,9 @@ hero:
 
 {/* ── Hero: one clear message ── */}
 <section class="hero-section" id="main-content">
-  <h1 class="hero-title" set:html="CI pipelines that<br /><span class='accent'>never lose your work.</span>" />
+  <h1 class="hero-title" set:html="Explore CI with<br /><span class='accent'>Temporal workflows.</span>" />
 
-  <div class="hero-subtitle">Built on Temporal. Every pipeline is a durable workflow — retryable, observable, and resilient to infrastructure failures. Runs on any Kubernetes cluster.</div>
+  <div class="hero-subtitle">An open-source proof of concept for workflow orchestration, Kubernetes build pods, and GitHub reporting. Intended for disposable environments and trusted repositories.</div>
 
   <div class="hero-actions">
     <a href="/TemporalCI/getting-started/quickstart/" class="btn-primary">Get Started →</a>
@@ -41,12 +41,12 @@ hero:
       <span class="terminal-dot green"></span>
     </div>
     <div class="terminal-body">
-      <div class="line"><span class="prompt">$</span> <span class="cmd">helm install temporalci ./deploy/helm -f values-local.yaml</span></div>
-      <div class="line"><span class="muted">NAME: temporalci — STATUS: deployed</span></div>
+      <div class="line"><span class="prompt">$</span> <span class="cmd">make check</span></div>
+      <div class="line"><span class="muted">Start with local checks. No cloud credentials needed.</span></div>
       <div class="line">&nbsp;</div>
-      <div class="line"><span class="success">✓</span> Temporal server ........... <span class="success">ready</span></div>
-      <div class="line"><span class="success">✓</span> TemporalCI worker ......... <span class="success">ready</span></div>
-      <div class="line"><span class="success">✓</span> Webhook server ............ <span class="success">ready</span></div>
+      <div class="line"><span class="cmd">go build ./...</span></div>
+      <div class="line"><span class="cmd">go vet ./...</span></div>
+      <div class="line"><span class="cmd">go test -race ./...</span></div>
     </div>
   </div>
 </section>
@@ -56,18 +56,18 @@ hero:
   <div class="pillars">
     <div class="pillar">
       <div class="pillar-icon"><i class="fa-solid fa-shield-halved"></i></div>
-      <h3>Durable</h3>
-      <div class="pillar-text">Node crashes mid-build? Temporal replays the workflow and resumes from the last completed step. Not from scratch.</div>
+      <h3>Workflow history</h3>
+      <div class="pillar-text">Inspect orchestration decisions and activity results in Temporal. Worker-local files and running commands still need their own recovery strategy.</div>
     </div>
     <div class="pillar">
       <div class="pillar-icon"><i class="fa-brands fa-docker"></i></div>
-      <h3>Isolated</h3>
-      <div class="pillar-text">Every CI step runs in its own K8s pod. Resource limits, dedicated node pool, network isolation. No shared runners.</div>
+      <h3>Build pods</h3>
+      <div class="pillar-text">Experiment with container images, resources, and service containers. Configure isolation for your cluster; this POC is not a multi-tenant sandbox.</div>
     </div>
     <div class="pillar">
       <div class="pillar-icon"><i class="fa-solid fa-cube"></i></div>
-      <h3>Simple</h3>
-      <div class="pillar-text">One Helm chart. Same config on minikube and EKS Auto Mode. 12 lines of YAML to define your pipeline.</div>
+      <h3>Declarative pipelines</h3>
+      <div class="pillar-text">Define steps in YAML and explore dependencies, conditions, matrix child workflows, and post-build cleanup.</div>
     </div>
   </div>
 </section>
@@ -77,15 +77,15 @@ hero:
   <div class="config-split">
     <div class="config-left">
       <div class="section-label">Your entire pipeline</div>
-      <h2 class="section-title">.temporalci.yaml</h2>
+      <h2 class="section-title">.temporalci/default.yaml</h2>
       <div class="config-points">
         <div class="config-point">
           <i class="fa-solid fa-arrows-split-up-and-left"></i>
-          <div>Steps without <code>depends_on</code> run in parallel automatically</div>
+          <div>Declare step dependencies; matrix child workflows support concurrency</div>
         </div>
         <div class="config-point">
           <i class="fa-solid fa-clock"></i>
-          <div>Temporal enforces timeouts — no zombie builds</div>
+          <div>Set activity timeouts and inspect failures in workflow history</div>
         </div>
         <div class="config-point">
           <i class="fa-solid fa-box"></i>
@@ -98,7 +98,7 @@ hero:
         <span class="terminal-dot red"></span>
         <span class="terminal-dot yellow"></span>
         <span class="terminal-dot green"></span>
-        <span class="terminal-filename">.temporalci.yaml</span>
+        <span class="terminal-filename">.temporalci/default.yaml</span>
       </div>
       <div class="terminal-body">
         <div><span class="cmd">steps:</span></div>
@@ -145,54 +145,48 @@ hero:
     worker:R --> L:s3`} />
   </div>
 
-  <div class="arch-note">Runs on any Kubernetes cluster — EKS, GKE, or minikube. <a href="/TemporalCI/architecture/overview/">See full architecture →</a></div>
+  <div class="arch-note">Includes minikube and EKS experiment configurations. <a href="/TemporalCI/architecture/overview/">See architecture and limitations →</a></div>
 </section>
 
 {/* ── Comparison: tight, scannable ── */}
 <section class="landing-section">
-  <div class="section-label">Comparison</div>
-  <h2 class="section-title">Why not just use…</h2>
+  <div class="section-label">POC boundaries</div>
+  <h2 class="section-title">What state is preserved?</h2>
 
   <div class="comparison-wrapper">
     <table class="comparison-table">
       <thead>
         <tr>
-          <th></th>
-          <th class="highlight">TemporalCI</th>
-          <th>Jenkins</th>
-          <th>GitHub Actions</th>
+          <th>State</th>
+          <th class="highlight">Storage</th>
+          <th>Current behavior</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>Build crashes</td>
-          <td class="highlight">Resumes from last step</td>
-          <td>Start over</td>
-          <td>Start over</td>
+          <td>Workflow decisions</td>
+          <td class="highlight">Temporal history</td>
+          <td>Replayed when a workflow worker restarts</td>
         </tr>
         <tr>
-          <td>Retry</td>
-          <td class="highlight">Per-step, with backoff</td>
-          <td>Entire pipeline</td>
-          <td>Entire workflow</td>
+          <td>Checkout files</td>
+          <td class="highlight">Worker filesystem</td>
+          <td>Not restored by workflow replay</td>
         </tr>
         <tr>
-          <td>Isolation</td>
-          <td class="highlight">K8s pod per step</td>
-          <td>Shared VM agents</td>
-          <td>Shared runners</td>
+          <td>Running build step</td>
+          <td class="highlight">Process or pod</td>
+          <td>One activity attempt; interruption may fail the build</td>
         </tr>
         <tr>
-          <td>Config</td>
-          <td class="highlight">.temporalci.yaml</td>
-          <td>Groovy DSL</td>
-          <td>Nested YAML</td>
+          <td>Dashboard sessions</td>
+          <td class="highlight">Webhook memory</td>
+          <td>Invalidated when the webhook process restarts</td>
         </tr>
         <tr>
-          <td>Cost</td>
-          <td class="highlight">Your cluster</td>
-          <td>Your servers</td>
-          <td>$0.008/min</td>
+          <td>Build logs</td>
+          <td class="highlight">Optional S3 storage</td>
+          <td>Retention depends on your storage configuration</td>
         </tr>
       </tbody>
     </table>
@@ -201,8 +195,8 @@ hero:
 
 {/* ── CTA: clean close ── */}
 <section class="footer-cta">
-  <h2>Try it in 5 minutes.</h2>
-  <div class="footer-cta-sub">minikube + helm install. No AWS account needed.</div>
+  <h2>Start with the local checks.</h2>
+  <div class="footer-cta-sub">Build, inspect the code, and run the tests before deploying an experiment.</div>
   <div class="hero-actions">
     <a href="/TemporalCI/getting-started/quickstart/" class="btn-primary">Get Started →</a>
     <a href="https://github.com/AndreKurait/TemporalCI" class="btn-secondary"><i class="fa-regular fa-star"></i> Star on GitHub</a>

@@ -28,6 +28,9 @@ spec:
               containerPort: {{ .Values.webhook.port }}
               protocol: TCP
           env:
+            # Bind inside the pod; the Service is ClusterIP by default.
+            - name: WEBHOOK_HOST
+              value: "0.0.0.0"
             - name: PORT
               value: {{ .Values.webhook.port | quote }}
             - name: TEMPORAL_HOST_PORT
@@ -45,16 +48,13 @@ spec:
             - name: GITHUB_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
+                  name: {{ .Values.githubOAuth.existingSecret | default (printf "%s-secrets" .Release.Name) }}
                   key: github-oauth-secret
-                  optional: true
-            - name: SESSION_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: session-secret
-                  optional: true
             {{- end }}
+            - name: GITHUB_ALLOWED_USERS
+              value: {{ join "," .Values.githubOAuth.allowedUsers | quote }}
+            - name: SESSION_COOKIE_SECURE
+              value: {{ .Values.githubOAuth.secureCookies | quote }}
             {{- if .Values.ciDashboard.publicRead }}
             - name: PUBLIC_READ
               value: "true"

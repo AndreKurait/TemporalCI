@@ -94,7 +94,7 @@ temporal:
             port: 5432
             database: temporal
             user: postgres
-            password: temporal
+            password: ""
         visibility:
           driver: sql
           sql:
@@ -103,7 +103,7 @@ temporal:
             port: 5432
             database: temporal_visibility
             user: postgres
-            password: temporal
+            password: ""
 
 postgresql:
   enabled: true
@@ -121,7 +121,7 @@ postgresql:
 secrets:
   local:
     enabled: true
-    githubWebhookSecret: "dev-secret"
+    githubWebhookSecret: ""
     githubToken: ""
 
 # LocalStack for S3 + Secrets Manager

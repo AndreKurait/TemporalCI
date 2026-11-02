@@ -1,6 +1,6 @@
 # Terraform apply — replaces terraform-apply.yml (manual trigger only)
 on:
-  webhook: true
+  webhook: {}
 
 parameters:
   - name: ACTION

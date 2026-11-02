@@ -36,7 +36,7 @@ flowchart TD
     Clone["1. CloneRepo\nInput: repo URL + git ref\nAction: git clone --depth=1, git checkout\nOutput: working directory path"]
     Clone --> Step
 
-    Step["2. RunStep (for each step in .temporalci.yaml)\nInput: directory, command, image\nAction: Create K8s pod → run → stream logs → collect exit code\nOutput: exit code, stdout/stderr, JUnit XML\nRetry: up to 3 attempts, 10min timeout"]
+    Step["2. RunStep (for each step in .temporalci/default.yaml)\nInput: directory, command, image\nAction: Create K8s pod → run → stream logs → collect exit code\nOutput: exit code, stdout/stderr, JUnit XML\nOne attempt, default 10min timeout"]
     Step --> Upload
 
     Upload["3. UploadLog (production only)\nInput: log content, workflow ID\nAction: Upload to S3, generate presigned URL (1hr)\nOutput: presigned URL for Check Run details"]
@@ -45,7 +45,7 @@ flowchart TD
     Report["4. ReportResults\nInput: repo, SHA, PR number, step results\nAction: Create GitHub Check Run + PR comment\nOutput: check run ID"]
 ```
 
-Each activity is independently retryable. If the worker crashes mid-pipeline, Temporal replays the workflow from the last completed activity.
+Activities have individual retry policies. Temporal replays recorded workflow decisions after a worker restart, but does not restore worker-local checkout files or a running command. Regular build steps currently have one attempt. See [SECURITY.md](../SECURITY.md) for the POC's trust and secret-handling limitations.
 
 ## K8s Pod Lifecycle
 

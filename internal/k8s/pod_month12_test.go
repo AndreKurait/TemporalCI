@@ -6,7 +6,7 @@ import (
 
 // --- Month 12: DinD, service containers, privileged mode, step outputs ---
 
-func TestBuildPod_DockerInDocker(t *testing.T) {
+func TestBuildPod_DockerHostConfigured(t *testing.T) {
 	spec := PodSpec{
 		Name: "ci-test", Namespace: "default",
 		Image: "golang:1.24", Command: []string{"sh", "-c", "docker build ."},
@@ -46,7 +46,7 @@ func TestBuildPod_DockerInDocker(t *testing.T) {
 	}
 }
 
-func TestBuildPod_ServiceContainers(t *testing.T) {
+func TestBuildPod_ServiceHealthCheck(t *testing.T) {
 	spec := PodSpec{
 		Name: "ci-test", Namespace: "default",
 		Image: "golang:1.24", Command: []string{"sh", "-c", "psql -h localhost"},
@@ -76,7 +76,7 @@ func TestBuildPod_ServiceContainers(t *testing.T) {
 	}
 }
 
-func TestBuildPod_Privileged(t *testing.T) {
+func TestBuildPod_PrivilegedCapabilities(t *testing.T) {
 	spec := PodSpec{
 		Name: "ci-test", Namespace: "default",
 		Image: "ubuntu:22.04", Command: []string{"sh", "-c", "kind create cluster"},
@@ -102,7 +102,7 @@ func TestBuildPod_Privileged(t *testing.T) {
 	}
 }
 
-func TestBuildPod_CollectOutputs(t *testing.T) {
+func TestBuildPod_OutputMountPath(t *testing.T) {
 	spec := PodSpec{
 		Name: "ci-test", Namespace: "default",
 		Image: "golang:1.24", Command: []string{"sh", "-c", "echo done"},
@@ -154,7 +154,7 @@ func TestBuildPod_DockerCachePVC(t *testing.T) {
 	}
 }
 
-func TestBuildPod_ArtifactPVC(t *testing.T) {
+func TestBuildPod_ArtifactMountPath(t *testing.T) {
 	spec := PodSpec{
 		Name: "ci-test", Namespace: "default",
 		Image: "golang:1.24", Command: []string{"sh", "-c", "echo"},

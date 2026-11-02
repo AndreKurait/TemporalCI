@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -27,19 +29,25 @@ type contextKey string
 const userContextKey contextKey = "user"
 
 var (
-	sessions      = struct {
+	sessions = struct {
 		sync.RWMutex
 		m map[string]*Session
 	}{m: make(map[string]*Session)}
-	sessionSecret = os.Getenv("SESSION_SECRET")
-	publicRead    = os.Getenv("PUBLIC_READ") == "true"
-	ghClientID    = os.Getenv("GITHUB_CLIENT_ID")
-	ghClientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
+	publicRead      = os.Getenv("PUBLIC_READ") == "true"
+	ghClientID      = os.Getenv("GITHUB_CLIENT_ID")
+	ghClientSecret  = os.Getenv("GITHUB_CLIENT_SECRET")
+	oauthHTTPClient = &http.Client{Timeout: 10 * time.Second}
+	oauthStates     = struct {
+		sync.Mutex
+		m map[string]time.Time
+	}{m: make(map[string]time.Time)}
 )
 
 func generateSessionID() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("cryptographic randomness unavailable")
+	}
 	return hex.EncodeToString(b)
 }
 
@@ -49,9 +57,27 @@ func setSessionCookie(w http.ResponseWriter, sid string) {
 		Value:    sid,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secureCookies(),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 7,
 	})
+}
+
+func secureCookies() bool {
+	// Opt out only for development over loopback HTTP.
+	return os.Getenv("SESSION_COOKIE_SECURE") != "false"
+}
+
+func allowedUser(login string) bool {
+	if login == "" {
+		return false
+	}
+	for _, candidate := range strings.Split(os.Getenv("GITHUB_ALLOWED_USERS"), ",") {
+		if strings.EqualFold(strings.TrimSpace(candidate), login) {
+			return true
+		}
+	}
+	return false
 }
 
 func getSessionFromRequest(r *http.Request) *Session {
@@ -62,7 +88,7 @@ func getSessionFromRequest(r *http.Request) *Session {
 	sessions.RLock()
 	defer sessions.RUnlock()
 	s := sessions.m[cookie.Value]
-	if s != nil && time.Now().After(s.ExpiresAt) {
+	if s != nil && (time.Now().After(s.ExpiresAt) || !allowedUser(s.GitHubLogin)) {
 		return nil
 	}
 	return s
@@ -70,16 +96,62 @@ func getSessionFromRequest(r *http.Request) *Session {
 
 // handleAuthGitHub redirects to GitHub OAuth authorize URL.
 func handleAuthGitHub(w http.ResponseWriter, r *http.Request) {
-	if ghClientID == "" {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if ghClientID == "" || ghClientSecret == "" || strings.TrimSpace(os.Getenv("GITHUB_ALLOWED_USERS")) == "" {
 		http.Error(w, "GitHub OAuth not configured", http.StatusServiceUnavailable)
 		return
 	}
-	url := fmt.Sprintf("https://github.com/login/oauth/authorize?client_id=%s&scope=read:user", ghClientID)
-	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	now := time.Now()
+	state := generateSessionID()
+	oauthStates.Lock()
+	for nonce, expiry := range oauthStates.m {
+		if now.After(expiry) {
+			delete(oauthStates.m, nonce)
+		}
+	}
+	if len(oauthStates.m) >= 1024 {
+		oauthStates.Unlock()
+		http.Error(w, "too many login attempts", http.StatusTooManyRequests)
+		return
+	}
+	oauthStates.m[state] = now.Add(10 * time.Minute)
+	oauthStates.Unlock()
+	http.SetCookie(w, &http.Cookie{
+		Name: "oauth_state", Value: state, Path: "/auth/github",
+		HttpOnly: true, Secure: secureCookies(), SameSite: http.SameSiteLaxMode, MaxAge: 600,
+	})
+	query := url.Values{"client_id": {ghClientID}, "scope": {"read:user"}, "state": {state}}
+	http.Redirect(w, r, "https://github.com/login/oauth/authorize?"+query.Encode(), http.StatusTemporaryRedirect)
 }
 
 // handleAuthCallback exchanges the OAuth code for a token and creates a session.
 func handleAuthCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	state := r.URL.Query().Get("state")
+	cookie, cookieErr := r.Cookie("oauth_state")
+	if cookieErr != nil || state == "" || subtle.ConstantTimeCompare([]byte(state), []byte(cookie.Value)) != 1 {
+		http.Error(w, "invalid OAuth state", http.StatusUnauthorized)
+		return
+	}
+	oauthStates.Lock()
+	expiry, exists := oauthStates.m[state]
+	delete(oauthStates.m, state)
+	oauthStates.Unlock()
+	http.SetCookie(w, &http.Cookie{
+		Name: "oauth_state", Path: "/auth/github", MaxAge: -1,
+		HttpOnly: true, Secure: secureCookies(), SameSite: http.SameSiteLaxMode,
+	})
+	if !exists || time.Now().After(expiry) {
+		http.Error(w, "expired OAuth state", http.StatusUnauthorized)
+		return
+	}
+
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "missing code", http.StatusBadRequest)
@@ -92,11 +164,14 @@ func handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return
 	}
-
 	user, err := fetchGitHubUser(token)
 	if err != nil {
 		slog.Error("failed to fetch github user", "error", err)
 		http.Error(w, "failed to fetch user", http.StatusInternalServerError)
+		return
+	}
+	if !allowedUser(user.Login) {
+		http.Error(w, "GitHub user is not allowed", http.StatusForbidden)
 		return
 	}
 
@@ -140,10 +215,13 @@ func handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		sessions.Unlock()
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:   "session",
-		Value:  "",
-		Path:   "/",
-		MaxAge: -1,
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secureCookies(),
+		SameSite: http.SameSiteLaxMode,
 	})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -192,11 +270,14 @@ func exchangeCode(code string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauthHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("OAuth endpoint returned status %d", resp.StatusCode)
+	}
 
 	var result struct {
 		AccessToken string `json:"access_token"`
@@ -208,6 +289,9 @@ func exchangeCode(code string) (string, error) {
 	if result.Error != "" {
 		return "", fmt.Errorf("oauth error: %s", result.Error)
 	}
+	if result.AccessToken == "" {
+		return "", fmt.Errorf("OAuth response did not include an access token")
+	}
 	return result.AccessToken, nil
 }
 
@@ -215,15 +299,21 @@ func fetchGitHubUser(token string) (*ghUser, error) {
 	req, _ := http.NewRequest("GET", "https://api.github.com/user", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauthHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub user endpoint returned status %d", resp.StatusCode)
+	}
 
 	var u ghUser
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
 		return nil, err
+	}
+	if u.Login == "" {
+		return nil, fmt.Errorf("GitHub response did not include a user login")
 	}
 	return &u, nil
 }

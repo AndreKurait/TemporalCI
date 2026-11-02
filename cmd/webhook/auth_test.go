@@ -8,6 +8,7 @@ import (
 )
 
 func TestSessionLifecycle(t *testing.T) {
+	t.Setenv("GITHUB_ALLOWED_USERS", "testuser")
 	t.Run("create_and_get", func(t *testing.T) {
 		sid := generateSessionID()
 		sessions.Lock()
@@ -76,6 +77,7 @@ func TestGenerateSessionID(t *testing.T) {
 }
 
 func TestAuthMiddlewareFunc(t *testing.T) {
+	t.Setenv("GITHUB_ALLOWED_USERS", "authuser")
 	sid := "auth-test-session"
 	sessions.Lock()
 	sessions.m[sid] = &Session{
@@ -124,6 +126,7 @@ func TestAuthMiddlewareFunc(t *testing.T) {
 }
 
 func TestOptionalAuthFunc(t *testing.T) {
+	t.Setenv("GITHUB_ALLOWED_USERS", "optuser")
 	sid := "opt-auth-session"
 	sessions.Lock()
 	sessions.m[sid] = &Session{

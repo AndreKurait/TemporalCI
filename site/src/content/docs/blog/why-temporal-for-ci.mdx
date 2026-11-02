@@ -80,7 +80,7 @@ The Temporal Web UI link is included in every PR comment, so developers can jump
 
 You could write Temporal workflows for CI yourself. TemporalCI is the opinionated layer on top:
 
-- **`.temporalci.yaml`** — declare your pipeline in 12 lines, not 200 lines of Go
+- **`.temporalci/default.yaml`** — declare your pipeline in 12 lines, not 200 lines of Go
 - **GitHub integration** — webhook handling, commit status, PR comments with logs
 - **K8s pod execution** — each step in an isolated pod with resource limits
 - **Helm chart** — one `helm install` gets Temporal + workers + webhook server running

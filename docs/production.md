@@ -103,7 +103,7 @@ helm install temporalci ./deploy/helm \
 kubectl get pods -n temporalci
 
 # Check Temporal Web UI
-kubectl port-forward svc/temporalci-temporal-web -n temporalci 8088:8088
+kubectl port-forward svc/temporalci-web -n temporalci 8088:8080
 
 # Trigger a test by pushing to a configured repo
 ```

@@ -20,7 +20,7 @@ webhook:
   replicas: 1
   port: 8080
   loadBalancer:
-    enabled: true
+    enabled: false
   resources:
     requests:
       cpu: 100m
@@ -31,7 +31,7 @@ webhook:
 
 temporalWeb:
   loadBalancer:
-    enabled: true
+    enabled: false
 
 temporal:
   enabled: true
@@ -97,7 +97,7 @@ temporal:
             port: 5432
             database: temporal
             user: postgres
-            password: temporal
+            password: ""
         visibility:
           driver: sql
           sql:
@@ -106,7 +106,7 @@ temporal:
             port: 5432
             database: temporal_visibility
             user: postgres
-            password: temporal
+            password: ""
 
 postgresql:
   enabled: true
@@ -159,5 +159,5 @@ ciDashboard:
   enabled: true
   replicas: 1
   port: 3000
-  publicRead: true
+  publicRead: false
   externalURL: ""  # Set via: --set ciDashboard.externalURL=http://<ELB_URL>

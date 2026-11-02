@@ -54,6 +54,7 @@ func TestReadAuth_PrivateMode(t *testing.T) {
 }
 
 func TestSessionCookie_SetAndRead(t *testing.T) {
+	t.Setenv("GITHUB_ALLOWED_USERS", "testuser")
 	sid := generateSessionID()
 	sessions.Lock()
 	sessions.m[sid] = &Session{

@@ -83,7 +83,7 @@ minikube start --cpus=4 --memory=4096
 
 **Cause:** Step exceeds memory limits.
 
-**Fix:** Increase resource limits in `.temporalci.yaml` or Helm values:
+**Fix:** Increase resource limits in `.temporalci/default.yaml` or Helm values:
 ```yaml
 # In Helm values
 worker:
@@ -98,7 +98,7 @@ worker:
 ### Can't access the UI
 
 ```bash
-kubectl port-forward svc/temporalci-temporal-web 8088:8088 -n temporalci
+kubectl port-forward svc/temporalci-web 8088:8080 -n temporalci
 ```
 
 Open [http://localhost:8088](http://localhost:8088).

@@ -211,6 +211,8 @@ Enable Docker socket access for steps that build/push images:
 
 Run a step container in privileged mode (required for some build tools):
 
+The instance operator must add the repository to `PRIVILEGED_REPOS` (`worker.privilegedRepos` in Helm). An empty list denies privileged containers, including the sidecar created by `docker: true`.
+
 ```yaml
 - name: build
   privileged: true

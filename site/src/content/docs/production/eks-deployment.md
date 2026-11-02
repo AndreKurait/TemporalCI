@@ -82,7 +82,7 @@ helm install temporalci ./deploy/helm \
 
 ```bash
 kubectl get pods -n temporalci
-kubectl port-forward svc/temporalci-temporal-web -n temporalci 8088:8088
+kubectl port-forward svc/temporalci-web -n temporalci 8088:8080
 ```
 
 ## GitOps with Argo CD

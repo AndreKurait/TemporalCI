@@ -1,13 +1,11 @@
 ---
 title: Why Temporal for CI?
-description: How Temporal's durable execution model solves CI's fundamental problems.
+description: What Temporal contributes to CI orchestration and what this POC still needs.
 ---
 
 ## The Core Problem
 
-Every CI system treats pipelines as **ephemeral processes**. A pipeline starts, runs steps, and either succeeds or fails. If anything goes wrong mid-execution — node crash, network timeout, OOM kill — the entire pipeline is lost. You start over.
-
-This is the same problem that plagued microservice orchestration before Temporal: long-running processes that need to survive infrastructure failures.
+CI orchestration needs to track work across asynchronous operations and infrastructure failures. TemporalCI explores using Temporal's persisted workflow history for those decisions. Recovering the actual build process and its filesystem state is a separate problem.
 
 ## What Temporal Gives Us
 
@@ -15,9 +13,9 @@ This is the same problem that plagued microservice orchestration before Temporal
 
 ### Workflow Replay
 
-When a Temporal worker crashes, the workflow doesn't die. Temporal replays the workflow history on a new worker, skipping already-completed activities, and resumes from exactly where it left off.
+Temporal can replay recorded workflow history on a new worker, using previously recorded activity results. This preserves orchestration decisions, not worker-local files or running shell commands.
 
-For CI, this means: if your worker node gets evicted mid-build, the pipeline resumes from the last completed step. The clone doesn't re-run. The tests that already passed don't re-run. Only the interrupted step retries.
+TemporalCI currently passes a worker-local checkout path between activities. A replacement worker may not have that directory. Ordinary `RunStep` activities also have one attempt, so an interrupted step is not automatically retried. These are explicit POC limitations.
 
 ### Per-Activity Retries
 
@@ -30,7 +28,7 @@ Each CI step is a Temporal activity with its own retry policy:
 | ReportResults | 3 | 1s → 5s | GitHub API can be flaky |
 | UploadLog | 2 | 2s → 10s | S3 uploads occasionally fail |
 
-This is fundamentally different from "re-run the whole pipeline." Only the failed activity retries, with configurable backoff.
+Retries depend on each activity's configured policy. Repeated side effects must be idempotent; Temporal history alone does not make an external build command safe to repeat.
 
 ### Cancellation with Cleanup
 
@@ -39,7 +37,9 @@ When a new push arrives on the same branch, TemporalCI cancels the previous work
 1. Cancel the running workflow
 2. Workflow catches the cancellation
 3. Cleanup activity runs (delete pods, report "cancelled" to GitHub)
-4. GitHub PR shows "cancelled" — not "pending forever"
+4. Attempt to report the final status to GitHub
+
+Cleanup and status reporting are best effort. They can fail if Kubernetes, AWS, or GitHub is unavailable.
 
 ### Full Observability
 
@@ -56,10 +56,10 @@ The Temporal Web UI gives you this for free — no custom dashboards needed.
 
 You could write Temporal workflows for CI yourself. TemporalCI is the opinionated layer on top:
 
-- **`.temporalci.yaml`** — declarative pipeline config instead of writing Go code
+- **`.temporalci/default.yaml`** — declarative pipeline config instead of writing Go code
 - **GitHub integration** — webhook handling, commit status, PR comments
 - **K8s pod execution** — each step in an isolated pod with resource limits
 - **Helm chart** — one install gets Temporal + workers + webhook server
-- **Security defaults** — pod isolation, network policies, RBAC
+- **Security controls** — operator authentication and optional cluster policies, with limitations described in the security model
 
-TemporalCI is to Temporal what GitHub Actions is to Azure Pipelines — a focused, opinionated CI experience built on a powerful execution engine.
+The goal is a small, inspectable experiment in workflow-based CI orchestration. It is not a production support or reliability guarantee.
