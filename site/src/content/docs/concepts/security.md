@@ -14,15 +14,9 @@ TemporalCI is a POC for trusted repositories and disposable environments. It is 
 
 ## Authentication Layers
 
-### GitHub → AWS (OIDC)
+### Repository Automation
 
-The deployment workflow can authenticate to AWS using OpenID Connect federation, avoiding a long-lived AWS key for that specific integration:
-
-```
-GitHub Actions → OIDC token → AWS STS AssumeRoleWithWebIdentity → temporary credentials
-```
-
-The IAM trust policy restricts access to the specific GitHub repo.
+The AWS image publisher and automatic GitOps tag updater have been removed. Repository CI does not assume an AWS role. The documentation workflow uses GitHub's identity token for GitHub Pages deployment, not AWS authentication. Terraform and Helm remain operator-managed examples; applying them is separate from repository CI.
 
 ### Pods → AWS (Pod Identity)
 

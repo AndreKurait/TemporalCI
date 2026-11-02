@@ -40,10 +40,7 @@ This creates:
 - Pod Identity associations for worker, webhook, and CI job service accounts
 - EKS add-ons: Secrets Store CSI Driver, CloudWatch Observability
 
-Alternatively, use the GitHub Actions workflow:
-
-1. Set `VPC_ID` and `PRIVATE_SUBNET_IDS` as GitHub Secrets
-2. Go to Actions → "Terraform Apply" → Run workflow → select "apply"
+These are operator-managed deployment examples. This repository has no Terraform Apply workflow or AWS image publishing workflow.
 
 ## 2. Configure kubectl
 
@@ -115,13 +112,13 @@ For automated deployments, configure the Argo CD EKS Capability to sync from thi
 1. Enable Argo CD capability on your EKS cluster (via Terraform or console)
 2. Create an Argo CD Application pointing at `deploy/helm/`
 3. Configure Helm value overrides with your production values
-4. Merging to `main` automatically deploys via Argo CD sync
+4. A configured Argo CD controller may apply chart/value changes from its tracked revision. GitHub Actions does not publish images or update image tags.
 
 ## Updating
 
-Push to `main` triggers the Docker Build workflow, which pushes a new image to ECR. If using Argo CD, it detects the change and syncs automatically. Otherwise:
+Build and publish an image through an independently configured process before selecting its existing tag in your deployment. Pushing to this repository does not publish an image or update a GitOps tag. For an operator-managed Helm installation, use a tag that you have already published:
 
 ```bash
 helm upgrade temporalci ./deploy/helm --namespace temporalci --reuse-values \
-  --set image.tag=$(git rev-parse HEAD)
+  --set image.tag="${PUBLISHED_IMAGE_TAG:?set an existing published image tag}"
 ```

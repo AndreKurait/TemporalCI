@@ -5,6 +5,8 @@ description: Deploy TemporalCI to production on AWS EKS.
 
 ## Prerequisites
 
+These are operator-managed deployment examples. This repository has no AWS image publishing or Terraform Apply workflow.
+
 - AWS CLI configured with admin access
 - Terraform ≥ 1.9
 - kubectl
@@ -92,13 +94,13 @@ For automated deployments:
 1. Enable Argo CD capability on your EKS cluster
 2. Create an Argo CD Application pointing at `deploy/helm/`
 3. Configure Helm value overrides with production values
-4. Merging to `main` automatically deploys via Argo CD sync
+4. A configured Argo CD controller may apply chart/value changes from its tracked revision. GitHub Actions does not publish images or update image tags.
 
 ## Updating
 
-Push to `main` triggers the Docker Build workflow → ECR → ArgoCD syncs automatically. Manual upgrade:
+Build and publish an image through an independently configured process before selecting its existing tag in your deployment. Pushing to this repository does not publish an image or update a GitOps tag. For an operator-managed Helm installation, use a tag that you have already published:
 
 ```bash
 helm upgrade temporalci ./deploy/helm --namespace temporalci --reuse-values \
-  --set image.tag=$(git rev-parse HEAD)
+  --set image.tag="${PUBLISHED_IMAGE_TAG:?set an existing published image tag}"
 ```

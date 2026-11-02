@@ -64,5 +64,5 @@ deploy/
 - **Temporal for orchestration** — workflows are plain Go functions with full replay semantics
 - **K8s execution** — each Kubernetes step gets its own pod, image, and resource limits
 - **EKS Auto Mode for compute** — optional node provisioning for the EKS experiment
-- **ArgoCD deployment example** — the main-branch image workflow updates GitOps values; applying them requires a configured, running ArgoCD controller
-- **OIDC for AWS deployment auth** — GitHub Actions can obtain temporary AWS credentials; GitHub/OAuth secrets and credentials in workflow history still require protection
+- **ArgoCD deployment example** — an operator-configured controller can apply chart/value changes; repository CI does not publish images or update GitOps tags
+- **Repository automation** — code checks and GitHub Pages deployment do not assume AWS roles; runtime GitHub/OAuth secrets and credentials in workflow history still require protection

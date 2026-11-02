@@ -15,7 +15,7 @@ Format changed Go files with `gofmt`. Commit `go.sum` or the relevant npm lockfi
 
 Include a regression test when fixing execution, authorization, or configuration behavior. Prefer testing the real handler or workflow boundary over copying its implementation into a test helper. Describe the triggering condition, resulting behavior, validation performed, and any compatibility changes in the pull request.
 
-Do not run `make bootstrap`, `make deploy`, Terraform, or the EKS scripts as part of routine verification. Those commands can create resources or change a deployment. The main-branch Docker workflow can also publish images and update GitOps state; branch and pull-request CI is the review path.
+Do not run `make bootstrap`, `make deploy`, Terraform, or the EKS scripts as part of routine verification. Those commands can create resources or change a deployment. GitHub Actions runs code checks and publishes GitHub Pages; the AWS image publisher and automatic GitOps tag updater have been removed.
 
 `make test-scripts` tests local Secret preparation with every kubectl call mocked. It does not contact a cluster. Helm rendering and these mocks do not verify a live PostgreSQL or Helm release migration.
 

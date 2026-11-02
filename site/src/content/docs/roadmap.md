@@ -27,7 +27,7 @@ All planned Q1–Q3 features and most Q4 features are complete. TemporalCI is a 
 - ✅ Secrets Store CSI for automatic rotation
 - ✅ Ephemeral EKS cluster pool with warm pool management
 - ✅ Helm test pipeline workflow
-- ✅ OIDC federation (zero stored credentials)
+- AWS publication integration removed; repository CI does not assume AWS roles
 - ✅ Astro Starlight docs site with GitHub Pages
 
 ### Remaining
