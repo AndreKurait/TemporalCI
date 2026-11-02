@@ -24,7 +24,7 @@
 - [x] GitHub App auth (JWT, installation tokens, PKCS1/PKCS8)
 - [x] Check Runs API with per-step annotations and inline output
 - [x] PR comments with timing, pass/fail, collapsible logs, Temporal UI link
-- [x] OIDC federation (no static AWS credentials)
+- [x] Removed GitHub AWS publication integration; repository CI does not assume AWS roles
 
 ### Multi-Repo & Self-Service
 - [x] Repo registration API (`/api/repos` CRUD)
@@ -58,8 +58,8 @@
 
 ### Docs & CI/CD
 - [x] Astro Starlight docs site with GitHub Pages deployment
-- [x] Docker build → ECR → ArgoCD GitOps pipeline
-- [x] OIDC bootstrap guide
+- [x] Removed automatic ECR publishing and GitOps tag updates
+- [x] Former OIDC bootstrap URL retained with removal notice
 
 ---
 

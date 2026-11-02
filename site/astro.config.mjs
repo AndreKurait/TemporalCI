@@ -31,7 +31,7 @@ export default defineConfig({
           label: 'Configuration',
           items: [
             { label: 'Pipeline Config (.temporalci.yaml)', slug: 'configuration/pipeline' },
-            { label: 'GitHub Secrets', slug: 'configuration/github-secrets' },
+            { label: 'Runtime Credentials', slug: 'configuration/github-secrets' },
           ],
         },
         {
@@ -53,7 +53,7 @@ export default defineConfig({
           label: 'Production',
           items: [
             { label: 'EKS Deployment', slug: 'production/eks-deployment' },
-            { label: 'OIDC Bootstrap', slug: 'production/oidc-bootstrap' },
+            { label: 'AWS Publication Status', slug: 'production/oidc-bootstrap' },
           ],
         },
         {

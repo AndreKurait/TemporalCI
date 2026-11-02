@@ -1,56 +1,26 @@
-# GitHub Secrets
+# GitHub and runtime credentials
 
-All secrets required for TemporalCI CI/CD pipelines and production deployment.
+## Repository Automation
 
-## Required for CI/CD
+The current GitHub Actions workflows run code checks and publish the documentation
+site to GitHub Pages. They use GitHub's built-in workflow token and do not require
+AWS access keys, an AWS role ARN, an AWS account ID, or an ECR registry.
 
-These secrets are used by GitHub Actions workflows to build and push Docker images.
+The AWS image publisher and automatic GitOps tag updater have been removed.
+There is no Terraform Apply workflow. Do not add AWS credentials or deployment
+variables to this repository for routine CI.
 
-| Secret | Used By | Description |
-|--------|---------|-------------|
-| `AWS_ACCESS_KEY_ID` | Docker Build, Terraform | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | Docker Build, Terraform | AWS secret key |
-| `AWS_SESSION_TOKEN` | Docker Build, Terraform | AWS session token (if using temporary credentials) |
-| `AWS_REGION` | Docker Build, Terraform | AWS region (e.g., `us-east-1`) |
-| `ECR_REGISTRY` | Docker Build | ECR registry URL (e.g., `123456789.dkr.ecr.us-east-1.amazonaws.com`) |
+## Runtime Credentials
 
-## Required for Terraform
+A separately deployed TemporalCI runtime still needs its own configuration:
 
-These additional secrets are needed when using the Terraform Apply workflow to bootstrap infrastructure.
+- `GITHUB_WEBHOOK_SECRET` validates GitHub webhook signatures.
+- GitHub API credentials let the worker report build results.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_ALLOWED_USERS` configure
+  operator login for the dashboard and management APIs.
 
-| Secret | Used By | Description |
-|--------|---------|-------------|
-| `VPC_ID` | Terraform Apply | VPC ID for the EKS cluster |
-| `PRIVATE_SUBNET_IDS` | Terraform Apply | JSON list of subnet IDs (e.g., `["subnet-aaa","subnet-bbb"]`) |
-
-## Required for Production Runtime
-
-These are stored in AWS Secrets Manager (not GitHub) and mounted into pods at runtime.
-
-| Secret Path | Used By | Description |
-|-------------|---------|-------------|
-| `${SECRETS_PREFIX}/github-webhook-secret` | Webhook server | HMAC secret for validating GitHub webhook signatures |
-| `${SECRETS_PREFIX}/github-token` | Worker | GitHub token for creating Check Runs and PR comments |
-
-## Setting Secrets
-
-### GitHub Secrets (via CLI)
-
-```bash
-gh secret set AWS_ACCESS_KEY_ID --repo AndreKurait/TemporalCI
-gh secret set AWS_SECRET_ACCESS_KEY --repo AndreKurait/TemporalCI
-gh secret set AWS_REGION --body "us-east-1" --repo AndreKurait/TemporalCI
-gh secret set ECR_REGISTRY --body "123456789.dkr.ecr.us-east-1.amazonaws.com" --repo AndreKurait/TemporalCI
-```
-
-### AWS Secrets Manager
-
-```bash
-aws secretsmanager create-secret \
-  --name "temporalci/github-webhook-secret" \
-  --secret-string "your-webhook-secret"
-
-aws secretsmanager create-secret \
-  --name "temporalci/github-token" \
-  --secret-string "ghp_your_token"
-```
+Provide runtime credentials through the secret mechanism selected for that
+deployment. They are distinct from repository workflow credentials. For local
+development, follow the [local setup guide](../site/src/content/docs/getting-started/local-dev.md).
+The Terraform and Helm directories are operator-managed examples; repository CI
+does not apply them.

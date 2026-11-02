@@ -89,7 +89,7 @@ GitHub webhook → Webhook server → Temporal → Go worker → build pods
 
 The deployment files are examples from the POC, not a supported production recipe. They need environment-specific configuration and review. Terraform, bootstrap scripts, and Helm installs can create billable resources.
 
-The repository's existing main-branch Docker workflow can push to ECR and update GitOps configuration when enabled. The site workflow publishes GitHub Pages. Use a branch and pull request for changes; local checks and the PR CI workflow do not deploy either.
+GitHub Actions runs code checks and publishes the documentation site to GitHub Pages. The AWS image publisher and automatic GitOps tag updater have been removed; repository CI does not assume an AWS role. The Terraform and Helm directories remain operator-managed deployment examples.
 
 ## Contributing
 
