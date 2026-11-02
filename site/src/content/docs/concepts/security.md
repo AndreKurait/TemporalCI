@@ -1,4 +1,6 @@
 ---
+banner:
+  content: 'Archived proof of concept — November 2026. This documentation is a frozen snapshot; development and GitHub automation have ended.'
 title: Security Model
 description: Security boundaries and limitations of the TemporalCI proof of concept.
 ---

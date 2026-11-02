@@ -1,4 +1,6 @@
 ---
+banner:
+  content: 'Archived proof of concept — November 2026. This documentation is a frozen snapshot; development and GitHub automation have ended.'
 title: Environment Variables
 description: Environment variables used by TemporalCI components.
 ---

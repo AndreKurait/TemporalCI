@@ -1,4 +1,6 @@
 ---
+banner:
+  content: 'Archived proof of concept — November 2026. This documentation is a frozen snapshot; development and GitHub automation have ended.'
 title: Local Development
 description: Run TemporalCI locally with minikube for development and testing.
 ---

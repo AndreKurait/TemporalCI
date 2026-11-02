@@ -1,4 +1,6 @@
 ---
+banner:
+  content: 'Archived proof of concept — November 2026. This documentation is a frozen snapshot; development and GitHub automation have ended.'
 title: Pipeline Config (.temporalci/default.yaml)
 description: Configure CI pipelines with .temporalci/default.yaml in your repository.
 ---

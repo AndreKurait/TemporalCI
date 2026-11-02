@@ -1,4 +1,6 @@
 ---
+banner:
+  content: 'Archived proof of concept — November 2026. This documentation is a frozen snapshot; development and GitHub automation have ended.'
 title: Roadmap
 description: TemporalCI development roadmap and current status.
 ---
