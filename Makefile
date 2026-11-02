@@ -49,23 +49,23 @@ local-up:
 	./scripts/local-up.sh
 
 local-down:
-	helm uninstall temporalci -n temporalci 2>/dev/null || true
+	helm --kube-context minikube uninstall temporalci -n temporalci 2>/dev/null || true
 
 local-restart: local-build
-	kubectl rollout restart deployment/temporalci-ci-worker -n temporalci
-	kubectl rollout restart deployment/temporalci-webhook -n temporalci
+	kubectl --context minikube rollout restart deployment/temporalci-ci-worker -n temporalci
+	kubectl --context minikube rollout restart deployment/temporalci-webhook -n temporalci
 
 local-logs-worker:
-	kubectl logs -f deployment/temporalci-ci-worker -n temporalci
+	kubectl --context minikube logs -f deployment/temporalci-ci-worker -n temporalci
 
 local-logs-webhook:
-	kubectl logs -f deployment/temporalci-webhook -n temporalci
+	kubectl --context minikube logs -f deployment/temporalci-webhook -n temporalci
 
 local-port-forward:
 	@echo "Temporal Web UI: http://localhost:8088"
 	@echo "Webhook:         http://localhost:8080"
-	kubectl port-forward svc/temporalci-web -n temporalci 8088:8080 &
-	kubectl port-forward svc/temporalci-webhook -n temporalci 8080:8080 &
+	kubectl --context minikube port-forward svc/temporalci-web -n temporalci 8088:8080 &
+	kubectl --context minikube port-forward svc/temporalci-webhook -n temporalci 8080:8080 &
 
 # --- CI Dashboard ---
 

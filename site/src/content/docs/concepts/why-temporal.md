@@ -59,7 +59,7 @@ You could write Temporal workflows for CI yourself. TemporalCI is the opinionate
 
 - **`.temporalci/default.yaml`** — declarative pipeline config instead of writing Go code
 - **GitHub integration** — webhook handling, commit status, PR comments
-- **K8s pod execution** — each step in an isolated pod with resource limits
+- **K8s pod execution** — each step runs in a separate pod. Separate pods are not a complete tenant-isolation boundary; network policy is disabled by default, and resource limits apply only when configured.
 - **Helm chart** — one install gets Temporal + workers + webhook server
 - **Security controls** — operator authentication and optional cluster policies, with limitations described in the security model
 

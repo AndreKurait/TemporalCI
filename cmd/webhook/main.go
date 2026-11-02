@@ -61,6 +61,7 @@ func main() {
 	server := &http.Server{
 		Addr:              net.JoinHostPort(cfg.WebhookHost, cfg.WebhookPort),
 		Handler:           newHTTPHandler(),
+		ReadTimeout:       60 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
