@@ -12,7 +12,7 @@ Send security reports privately to **andrekurait@gmail.com**. Include the affect
 - Dashboard sessions use GitHub OAuth. Configure `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and a comma-separated `GITHUB_ALLOWED_USERS` list. An empty allowlist grants no operator access.
 - OAuth state is bound to the initiating browser, expires after ten minutes, and can be used once. Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` by default. Set `SESSION_COOKIE_SECURE=false` only for an isolated loopback HTTP development session.
 - Management endpoints, custom triggers, and repository configuration always require an allowed operator, even if public build reads are enabled. Allowed operators can manage the whole instance; there is no per-repository role model.
-- `PUBLIC_READ=true` exposes build metadata, parameters, and log links. Enable it only for builds whose contents are intended to be public. Status badges are public independently.
+- `PUBLIC_READ=true` exposes build metadata, parameters, and log links. Enable it only for builds whose contents are intended to be public. Status badges are public independently and reveal whether a repository is registered.
 - Sessions, OAuth state, and notifications are held in memory. Restarting the webhook process invalidates sessions. Multiple replicas require shared session storage or another authentication design.
 
 ## Execution and secrets

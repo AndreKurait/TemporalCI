@@ -51,6 +51,8 @@ The helper reads `temporalci-local-secrets` through kubectl and signs its reques
 
 ## Dashboard Access
 
+The local setup leaves `ciDashboard.enabled` disabled and builds only the worker/webhook image. To experiment with the SvelteKit dashboard, first build and load its image into minikube, then enable `ciDashboard.enabled`. The chart derives the dashboard image from the shared `image.registry`, `image.repository` (with a `-dashboard` suffix), and `image.tag` values. OAuth configuration alone does not deploy the dashboard.
+
 Management and dashboard access require GitHub OAuth and an explicit operator allowlist. Use `githubOAuth.clientId`, `githubOAuth.existingSecret`, and `githubOAuth.allowedUsers` in Helm values. The existing Secret must contain `github-oauth-secret`. For loopback HTTP only, set `githubOAuth.secureCookies: false` and register the callback URL `http://localhost:8080/auth/github/callback` with the OAuth app.
 
 No browser login is required for the signed local webhook above. `PUBLIC_READ` does not enable management operations.
@@ -67,8 +69,8 @@ Review retained persistent volumes before deleting the minikube cluster.
 
 | | Local (minikube) | EKS example |
 |---|---|---|
-| **Temporal DB** | PostgreSQL subchart | RDS via ACK |
-| **Secrets** | K8s Secrets | AWS Secrets Manager |
-| **Logging** | stdout / kubectl logs | CloudWatch + S3 |
-| **Compute** | Single node | EKS Auto Mode |
-| **IAM** | N/A | EKS Pod Identity |
+| **Temporal DB** | PostgreSQL subchart | PostgreSQL subchart in the example; RDS/ACK requires separate configuration |
+| **Secrets** | K8s Secrets | K8s Secrets in the example; AWS Secrets Manager integration is optional |
+| **Logging** | Pod logs and LocalStack S3 | Pod logs; S3 needs a configured bucket and permissions |
+| **Compute** | Local minikube cluster | Experimental EKS Auto Mode configuration |
+| **IAM** | LocalStack development credentials | Roles and Pod Identity require environment-specific setup |

@@ -65,7 +65,7 @@ See the [pipeline reference](docs/pipeline-config.md) for additional options. De
 
 For an isolated Kubernetes experiment, install Docker, minikube, Helm, and kubectl, then follow the [local development guide](site/src/content/docs/getting-started/local-dev.md). The local stack also runs Temporal, PostgreSQL, and LocalStack; allow sufficient memory.
 
-The native webhook process binds to `127.0.0.1` by default. Helm explicitly binds it inside the pod and uses a `ClusterIP` service. GitHub webhooks require `GITHUB_WEBHOOK_SECRET`; an unset secret rejects requests. Dashboard and management access require GitHub OAuth and a `GITHUB_ALLOWED_USERS` operator allowlist. Build-read access is private by default; public badges expose only build status.
+The native webhook process binds to `127.0.0.1` by default. Helm explicitly binds it inside the pod and uses a `ClusterIP` service. GitHub webhooks require `GITHUB_WEBHOOK_SECRET`; an unset secret rejects requests. Dashboard and management access require GitHub OAuth and a `GITHUB_ALLOWED_USERS` operator allowlist. Build-read access is private by default; public badges expose build status and whether a repository is registered.
 
 ## Architecture
 
@@ -97,4 +97,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, and contribution s
 
 ## License
 
-[MIT](LICENSE).
+This repository does not yet include a license file.

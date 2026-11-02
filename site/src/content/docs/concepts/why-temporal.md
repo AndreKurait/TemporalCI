@@ -21,12 +21,13 @@ TemporalCI currently passes a worker-local checkout path between activities. A r
 
 Each CI step is a Temporal activity with its own retry policy:
 
-| Activity | Retries | Backoff | Why |
-|----------|---------|---------|-----|
-| CloneRepo | 3 | 5s → 30s | Git/network failures are transient |
-| RunStep | 1 | — | Build failures are usually real |
-| ReportResults | 3 | 1s → 5s | GitHub API can be flaky |
-| UploadLog | 2 | 2s → 10s | S3 uploads occasionally fail |
+| Activity | Maximum total attempts | Backoff | Why |
+|----------|------------------------|---------|-----|
+| CloneRepo | 3 | 5s initial, doubles up to 30s | Retry transient Git/network failures |
+| RunStep | 1 | None | Do not automatically repeat build commands |
+| ReportResults | 3 | Temporal SDK defaults | Retry transient reporting failures |
+
+`MaximumAttempts` includes the initial attempt. Log upload occurs inside step execution and does not have a separate workflow activity retry policy.
 
 Retries depend on each activity's configured policy. Repeated side effects must be idempotent; Temporal history alone does not make an external build command safe to repeat.
 

@@ -42,7 +42,7 @@ GitHub webhooks require HMAC-SHA256 signature verification before any workflow i
 
 GitHub OAuth requires `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_ALLOWED_USERS`. The last variable is a comma-separated operator allowlist; an empty list grants no access. OAuth state is browser-bound, expires after ten minutes, and can be used once.
 
-Management APIs and custom triggers require an allowed operator. Build reads are private by default. `PUBLIC_READ=true` explicitly exposes build metadata, parameters, and log links. Public badges expose status independently. Cookies are secure by default; the loopback HTTP development opt-out is `SESSION_COOKIE_SECURE=false`.
+Management APIs and custom triggers require an allowed operator. Build reads are private by default. `PUBLIC_READ=true` explicitly exposes build metadata, parameters, and log links. Public badges expose build status and whether a repository is registered independently of this setting. Cookies are secure by default; the loopback HTTP development opt-out is `SESSION_COOKIE_SECURE=false`.
 
 Sessions live in memory and disappear on restart. The POC does not implement per-repository roles or shared session storage for multiple replicas.
 

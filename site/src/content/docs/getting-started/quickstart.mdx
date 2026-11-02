@@ -15,7 +15,7 @@ Before you start, make sure you have:
 - [Helm 3](https://helm.sh/docs/intro/install/) (v3.14+)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - Docker and OpenSSL
-- A GitHub repo to test with
+- A public GitHub repo you control to test with
 
 <Aside type="tip">
 No AWS account needed. Everything runs locally on minikube.
@@ -102,7 +102,7 @@ steps:
 
   - name: test
     image: python:3.12
-    command: pip install -r requirements.txt && python -m pytest
+    command: pip install -r requirements.txt pytest && python -m pytest
     depends_on: [install]
 
   - name: lint
@@ -114,6 +114,16 @@ steps:
 </Tabs>
 
 Each Kubernetes step gets a fresh checkout. Install its dependencies in that step; `depends_on` controls ordering and success conditions, and does not share the previous container filesystem.
+
+From your test repository's checkout, commit and push the pipeline so the worker can fetch it:
+
+```bash
+git add .temporalci/default.yaml
+git commit -m "Add a TemporalCI pipeline"
+git push origin HEAD
+```
+
+The trigger example below uses `main`. Replace it with the branch you just pushed if different. Uncommitted or unpushed files are not included in the worker's clone.
 
 ## Connect GitHub
 
@@ -149,19 +159,7 @@ The local test event asks TemporalCI to:
 
 For real GitHub deliveries, configure an HTTPS webhook endpoint and the matching secret through your own deployment. A localhost port-forward is not reachable by GitHub. Review the [security model](/TemporalCI/concepts/security/) before accepting pull-request builds.
 
-You'll see results on your PR:
-
-```markdown
-## TemporalCI Results — abc1234
-
-✅ build (12.5s)
-✅ test (20.2s)
-✅ vet (3.1s)
-
-3 passed, 0 failed in 35.8s
-
-🔗 View workflow in Temporal UI
-```
+Inspect this local run in the Temporal Web UI below. The synthetic push is not a pull-request event and does not supply a commit SHA, so it does not demonstrate PR comments or commit status reporting. Those require a real event with the corresponding metadata and scoped GitHub credentials.
 
 ## View the Temporal Web UI
 
@@ -180,17 +178,14 @@ git push → GitHub Webhook → Webhook Server → Temporal Workflow
                                               │  CloneRepo │
                                               └─────┬─────┘
                                               ┌─────┴─────┐
-                                         ┌────┤  RunStep   ├────┐
-                                         │    └───────────┘    │
-                                    ┌────┴────┐          ┌────┴────┐
-                                    │  build   │          │  vet    │
-                                    └────┬────┘          └─────────┘
-                                    ┌────┴────┐
-                                    │  test    │
-                                    └────┬────┘
-                                    ┌────┴────────┐
-                                    │ ReportResults│
-                                    └─────────────┘
+                                              │ RunStep   │
+                                              │ build     │
+                                              │ test      │
+                                              │ vet       │
+                                              └─────┬─────┘
+                                            ┌───────┴───────┐
+                                            │ ReportResults │
+                                            └───────────────┘
 ```
 
 Temporal can replay workflow decisions after a worker restart. Worker-local checkout files and running commands are not preserved by replay, and regular build steps currently have one attempt. Treat restart recovery as an area to evaluate in this POC, not a build-survival guarantee.

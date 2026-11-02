@@ -36,10 +36,10 @@ flowchart TD
     Clone["1. CloneRepo\nInput: repo URL + git ref\nAction: git clone --depth=1, git checkout\nOutput: working directory path"]
     Clone --> Step
 
-    Step["2. RunStep (for each step in .temporalci/default.yaml)\nInput: directory, command, image\nAction: Create K8s pod → run → stream logs → collect exit code\nOutput: exit code, stdout/stderr, JUnit XML\nOne attempt, default 10min timeout"]
+    Step["2. RunStep (for each step in the selected .temporalci/*.yaml pipeline)\nInput: directory, command, image\nAction: Create K8s pod → run → stream logs → collect exit code\nOutput: exit code, stdout/stderr, JUnit XML\nOne attempt, default 10min timeout"]
     Step --> Upload
 
-    Upload["3. UploadLog (production only)\nInput: log content, workflow ID\nAction: Upload to S3, generate presigned URL (1hr)\nOutput: presigned URL for Check Run details"]
+    Upload["3. UploadLog (when object storage is configured)\nInput: log content, workflow ID\nAction: Upload to S3, generate presigned URL\nOutput: presigned URL for Check Run details"]
     Upload --> Report
 
     Report["4. ReportResults\nInput: repo, SHA, PR number, step results\nAction: Create GitHub Check Run + PR comment\nOutput: check run ID"]
@@ -58,7 +58,7 @@ sequenceDiagram
     participant P as CI Pod
 
     W->>K: Create Pod (image, command, ci-jobs toleration)
-    K->>P: Schedule on ci-jobs NodePool
+    K->>P: Schedule according to pod selectors and cluster configuration
     P->>P: Execute CI command
     W->>K: Watch pod status
     K-->>W: Phase: Succeeded/Failed
@@ -74,10 +74,11 @@ sequenceDiagram
 | Layer | Mechanism |
 |-------|-----------|
 | **Webhook validation** | HMAC-SHA256 signature verification on every GitHub event |
-| **Secret storage** | File mounts from K8s Secrets (local) or AWS Secrets Manager (prod) |
-| **IAM** | EKS Pod Identity — each component gets least-privilege IAM role |
-| **Network isolation** | CI jobs run on dedicated `ci-jobs` NodePool with taints |
-| **Container isolation** | Each CI step runs in its own ephemeral pod |
+| **Secret storage** | K8s Secrets in the checked-in local/EKS values; AWS Secrets Manager integration is optional |
+| **IAM** | EKS role and Pod Identity examples require environment-specific configuration and review |
+| **Scheduling** | Optional `ci-jobs` NodePool; taints and selectors control placement, not network access |
+| **Network policy** | Disabled by default; enabling it also requires an enforcing CNI |
+| **Execution** | K8s steps run in ephemeral pods; the local fallback runs as the worker's operating-system user |
 
 ## Data Flow
 
@@ -92,7 +93,7 @@ flowchart LR
     G --> H["Report\n→ GitHub API"]
 ```
 
-No CI state is stored in the webhook server or worker — Temporal owns all execution state. Both components are stateless and horizontally scalable.
+Temporal stores workflow history. Repository registration is file-backed, sessions and notifications are in memory, and checkout paths are worker-local. Multiple replicas and restart recovery require additional state-sharing and workspace design.
 
 ## CI Dashboard
 

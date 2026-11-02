@@ -5,11 +5,9 @@ description: The technical reasoning behind using Temporal's durable execution m
 
 import { Aside } from '@astrojs/starlight/components';
 
-*March 2025*
+*March 2025 — implementation notes updated November 2026*
 
-Every CI system we've used has the same fundamental problem: **pipelines are ephemeral processes.** They start, they run, and if anything goes wrong — node crash, network timeout, OOM kill — the entire pipeline is lost. You click "re-run" and hope for the best.
-
-We kept asking: why does CI still work this way? The distributed systems world solved this problem years ago with durable execution. Why hasn't CI caught up?
+CI orchestration must coordinate processes that can fail independently: repository checkout, containers, reporting APIs, and cleanup. TemporalCI is a proof of concept exploring whether Temporal's persisted workflow history makes those decisions easier to inspect and manage.
 
 ## The Insight
 
@@ -21,29 +19,30 @@ A CI pipeline is just another long-running process:
 2. Run some commands in containers
 3. Report results
 
-Each of those steps is an **activity** in Temporal's model. If the worker running step 2 crashes, Temporal replays the workflow on a new worker, skips the already-completed clone, and re-executes only the failed step.
+Each of those steps is an **activity** in Temporal's model. Temporal can replay orchestration decisions using recorded activity results. Whether a failed activity runs again depends on its retry policy.
 
-This isn't retry-from-scratch. This is **resume-from-checkpoint**, built into the execution model.
+TemporalCI passes a worker-local checkout path between activities. A replacement worker may not have that directory, and ordinary build steps currently have one attempt. Workflow replay therefore does not guarantee recovery of the build process or its filesystem.
 
-## What This Gives Us for Free
+## What Temporal Contributes
 
-By building on Temporal, we get capabilities that other CI systems have to build from scratch (and usually don't):
+Temporal supplies workflow history, task queues, and configurable activity policies. The application still has to handle external side effects, credentials, and cleanup.
 
 ### Automatic Retries with Backoff
 
-Each activity has its own retry policy. A `git clone` that fails due to a transient network error gets retried 3 times with exponential backoff. A build step that fails because of a real code error gets retried once (or not at all). The retry policy is per-activity, not per-pipeline.
+Each activity has its own retry policy. Clone has at most three total attempts, including the initial attempt. Regular build steps have one total attempt and are not automatically retried.
 
 ```go
-// Clone gets 3 retries — network failures are transient
+// Clone gets at most 3 total attempts.
 cloneOpts := workflow.ActivityOptions{
     RetryPolicy: &temporal.RetryPolicy{
         MaximumAttempts: 3,
         InitialInterval: 5 * time.Second,
         BackoffCoefficient: 2.0,
+        MaximumInterval: 30 * time.Second,
     },
 }
 
-// Build steps get 1 retry — failures are usually real
+// Build steps get 1 total attempt: no automatic retry.
 stepOpts := workflow.ActivityOptions{
     RetryPolicy: &temporal.RetryPolicy{
         MaximumAttempts: 1,
@@ -53,63 +52,54 @@ stepOpts := workflow.ActivityOptions{
 
 ### Graceful Cancellation
 
-When a new push arrives on the same branch, we cancel the previous workflow. In most CI systems, cancellation means "kill the process and hope for the best." In Temporal, cancellation is a signal — the workflow catches it and runs cleanup:
+When a new push arrives for the same branch and event/pipeline, TemporalCI requests cancellation of the previous workflow and attempts cleanup:
 
 1. Cancel running activities
 2. Delete orphaned K8s pods
-3. Report "cancelled" to GitHub (not "pending forever")
+3. Report the final status to GitHub
 
-This happens in a **disconnected context** that survives the cancellation itself.
+Cleanup uses a **disconnected context** so it can be attempted after workflow cancellation. It remains best effort. Cancellation is cooperative and does not prove every shell subprocess or pod has stopped; verify termination before retrying infrastructure operations.
 
-### Full Observability
+### Execution History
 
 Every workflow execution is recorded. You can:
 
 - See the exact input and output of every activity
 - See how long each step took
-- Replay any workflow execution to debug failures
+- Inspect recorded events to debug orchestration failures
 - Query running workflows for real-time status
 
-The Temporal Web UI gives you this for free. No custom dashboards, no log aggregation setup, no Prometheus queries. Just open the UI and click on a workflow.
+The Temporal Web UI displays workflow history. It does not replace build-log storage or infrastructure monitoring. Activity payloads may contain credentials in this POC, so protect Temporal and its database.
 
 <Aside type="tip">
-The Temporal Web UI link is included in every PR comment, so developers can jump straight from a failed build to the full execution trace.
+With GitHub reporting configured and a real pull-request event, result comments can link developers to the workflow. The signed local test event does not demonstrate PR reporting.
 </Aside>
 
 ## Why Not Just Use Temporal Directly?
 
 You could write Temporal workflows for CI yourself. TemporalCI is the opinionated layer on top:
 
-- **`.temporalci/default.yaml`** — declare your pipeline in 12 lines, not 200 lines of Go
+- **`.temporalci/*.yaml`** — declare named pipelines without writing Go workflows
 - **GitHub integration** — webhook handling, commit status, PR comments with logs
-- **K8s pod execution** — each step in an isolated pod with resource limits
-- **Helm chart** — one `helm install` gets Temporal + workers + webhook server running
-- **Security defaults** — CI pods get zero K8s API access, network policies isolate them
-
-TemporalCI is to Temporal what GitHub Actions is to Azure Pipelines — a focused, opinionated CI experience built on a powerful execution engine.
+- **K8s pod execution** — Kubernetes steps run in separate pods with resource limits
+- **Helm chart** — local and EKS examples need environment-specific secrets and configuration
+- **Security controls** — operator authentication and optional network policies; policies are disabled by default and require an enforcing CNI
 
 ## The Trade-offs
 
-We're honest about what TemporalCI is and isn't:
+The current POC is useful for evaluating workflow orchestration, not for a production reliability or tenant-isolation guarantee.
 
-**Good for:**
-- Teams that run CI on their own Kubernetes clusters
-- Go, container, and infrastructure workloads
-- Organizations that want full control over their CI infrastructure
-- Teams that value observability and debuggability
+**Useful experiments:**
+- Trusted Go, container, and infrastructure workloads
+- Workflow history and per-activity retry policies
+- Kubernetes build execution in disposable infrastructure
 
-**Not (yet) good for:**
-- Teams that want zero infrastructure management (use GitHub Actions)
-- Projects that need a massive ecosystem of pre-built actions/plugins
-- Non-Kubernetes environments
+**Open limitations:**
+- Worker-local checkout state during restarts
+- Credentials in activity history
+- Best-effort cancellation and cleanup
+- Unisolated local command fallback when no in-cluster Kubernetes client is available
 
 ## What's Next
 
-TemporalCI is open source and actively developed. We're working on:
-
-- Ephemeral EKS clusters for Helm chart testing
-- Matrix builds across multiple language versions
-- GitHub App integration for richer Check Runs
-- Monorepo support with changed-path detection
-
-Check the [roadmap](/TemporalCI/roadmap/) for the full plan, or [get started](/TemporalCI/getting-started/quickstart/) in 5 minutes on minikube.
+The repository includes experimental EKS workflows, matrix builds, Check Run reporting, and path filters. Their presence is not production validation. See the [roadmap](/TemporalCI/roadmap/) for direction and the [quick start](/TemporalCI/getting-started/quickstart/) to explore the local POC.
