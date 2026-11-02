@@ -1,4 +1,4 @@
-.PHONY: build test test-race lint check clean deploy bootstrap helm-dependencies local-build local-up local-down local-restart local-logs-worker local-logs-webhook local-port-forward dashboard-install dashboard-build dashboard-dev docker-build-dashboard docker-build-all
+.PHONY: build test test-race test-scripts lint check clean deploy bootstrap helm-dependencies local-build local-up local-down local-restart local-logs-worker local-logs-webhook local-port-forward dashboard-install dashboard-build dashboard-dev docker-build-dashboard docker-build-all
 
 build:
 	go build ./...
@@ -12,7 +12,11 @@ test-race:
 lint:
 	go vet ./...
 
-check: build lint test-race
+test-scripts:
+	python3 -m unittest discover -s scripts -p 'test_*.py' -v
+	bash -n scripts/local-up.sh scripts/local-trigger.sh
+
+check: build lint test-race test-scripts
 
 clean:
 	rm -rf /tmp/ci

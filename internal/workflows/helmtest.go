@@ -91,6 +91,7 @@ func HelmTestPipeline(ctx workflow.Context, input HelmTestPipelineInput) (HelmTe
 	var cloneResult activities.CloneResult
 	if err := workflow.ExecuteActivity(cloneCtx, acts.CloneRepo, activities.CloneInput{
 		Repo: input.Repo, Ref: input.Ref, WorkflowID: wfID,
+		SkipPipelineConfig: true,
 	}).Get(ctx, &cloneResult); err != nil {
 		return HelmTestPipelineResult{Status: "failed", ClusterName: lease.ClusterName},
 			fmt.Errorf("clone: %w", err)
@@ -129,9 +130,9 @@ func HelmTestPipeline(ctx workflow.Context, input HelmTestPipelineInput) (HelmTe
 	dReportCtx := withReportOptions(dCtx)
 
 	stepResult := activities.StepResult{
-		Name:   "helm-test",
-		Status: status,
-		Output: activities.TruncateOutput(helmResult.InstallOutput+"\n---\n"+helmResult.TestOutput, 4000),
+		Name:     "helm-test",
+		Status:   status,
+		Output:   activities.TruncateOutput(helmResult.InstallOutput+"\n---\n"+helmResult.TestOutput, 4000),
 		Duration: duration,
 	}
 

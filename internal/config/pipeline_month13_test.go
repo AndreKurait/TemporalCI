@@ -33,8 +33,11 @@ func TestShouldRun_TagPush_Wildcard(t *testing.T) {
 	if !p.ShouldRun("tag", "v1.0.0") {
 		t.Error("should run for tag event with wildcard")
 	}
-	if !p.ShouldRun("push", "v2.0.0") {
+	if !p.ShouldRun("push", "refs/tags/v2.0.0") {
 		t.Error("should run for push with tag wildcard")
+	}
+	if p.ShouldRun("push", "refs/heads/main") {
+		t.Error("tags-only filter must not run for a branch push")
 	}
 }
 

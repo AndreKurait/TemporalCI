@@ -39,7 +39,7 @@ spec:
             - name: GITHUB_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
+                  name: {{ include "temporalci.localSecretName" . }}
                   key: github-webhook-secret
             {{- end }}
             {{- if .Values.githubOAuth.clientId }}
@@ -48,7 +48,7 @@ spec:
             - name: GITHUB_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.githubOAuth.existingSecret | default (printf "%s-secrets" .Release.Name) }}
+                  name: {{ .Values.githubOAuth.existingSecret | default (include "temporalci.localSecretName" .) }}
                   key: github-oauth-secret
             {{- end }}
             - name: GITHUB_ALLOWED_USERS

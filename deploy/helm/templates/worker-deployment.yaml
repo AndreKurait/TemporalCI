@@ -73,7 +73,7 @@ spec:
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
+                  name: {{ include "temporalci.localSecretName" . }}
                   key: github-token
             {{- end }}
           {{- if .Values.githubApp.enabled }}

@@ -1,4 +1,4 @@
-# Terraform apply — replaces terraform-apply.yml (manual trigger only)
+# Terraform plan/apply/destroy — explicit manual or authenticated custom webhook
 on:
   webhook: {}
 

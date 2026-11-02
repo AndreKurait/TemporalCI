@@ -80,6 +80,7 @@ secrets:
   prefix: temporalci
   local:
     enabled: false
+    existingSecret: ""
     githubWebhookSecret: ""
     githubToken: ""
   aws:

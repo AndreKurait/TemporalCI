@@ -121,6 +121,7 @@ postgresql:
 secrets:
   local:
     enabled: true
+    existingSecret: temporalci-local-secrets
     githubWebhookSecret: ""
     githubToken: ""
 

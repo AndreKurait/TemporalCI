@@ -17,21 +17,8 @@ echo "Enabling minikube registry..."
 minikube addons enable registry
 
 # Keep local credentials out of values files and preserve them across upgrades.
-kubectl create namespace temporalci --dry-run=client -o yaml | kubectl apply -f -
-SECRET_FILE="$(mktemp)"
-trap 'rm -f "$SECRET_FILE"' EXIT
-if ! kubectl get secret temporalci-database -n temporalci >/dev/null 2>&1; then
-  openssl rand -hex 32 | tr -d '\n' > "$SECRET_FILE"
-  kubectl create secret generic temporalci-database -n temporalci \
-    --from-file=postgres-password="$SECRET_FILE"
-fi
-if ! kubectl get secret temporalci-secrets -n temporalci >/dev/null 2>&1; then
-  openssl rand -hex 32 | tr -d '\n' > "$SECRET_FILE"
-  kubectl create secret generic temporalci-secrets -n temporalci \
-    --from-file=github-webhook-secret="$SECRET_FILE" \
-    --from-literal=github-token=
-fi
-rm -f "$SECRET_FILE"
+kubectl --context minikube create namespace temporalci --dry-run=client -o yaml | kubectl --context minikube apply -f -
+python3 "$SCRIPT_DIR/prepare-local-secrets.py"
 
 # Build and push image to minikube registry
 echo "Building and pushing image..."
@@ -47,12 +34,13 @@ make helm-dependencies
 # Install
 echo "Installing TemporalCI..."
 helm upgrade --install temporalci deploy/helm \
+  --kube-context minikube \
   -n temporalci --create-namespace \
   -f deploy/helm/values-local.yaml
 
 echo ""
 echo "=== Waiting for pods ==="
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=temporalci \
+kubectl --context minikube wait --for=condition=ready pod -l app.kubernetes.io/name=temporalci \
   -n temporalci --timeout=180s
 
 echo ""

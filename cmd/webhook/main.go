@@ -179,10 +179,8 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 		slog.Info("started workflow", "id", run.GetID(), "runID", run.GetRunID(), "event", event, "repo", input.Repo, "pipeline", input.PipelineName)
 
-		// Set pending commit status immediately so GitHub shows it on the PR
-		if input.HeadSHA != "" && input.PipelineName == "" {
-			go setPendingCommitStatus(input.Repo, input.HeadSHA, run.GetID())
-		}
+		// The selected workflow sets pending status after trigger filtering.
+		// Setting it here would leave unmatched events permanently pending.
 
 		started = append(started, map[string]string{
 			"workflowId": run.GetID(), "runId": run.GetRunID(), "pipeline": input.PipelineName,

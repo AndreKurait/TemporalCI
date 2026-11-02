@@ -34,23 +34,39 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 		Repo: input.Repo, Ref: input.Ref,
 		WorkflowID:   workflow.GetInfo(ctx).WorkflowExecution.ID,
 		PipelineName: input.PipelineName,
+		Event:        input.Event, Payload: input.Payload,
+		ChangedFiles: input.ChangedFiles, Labels: input.Labels,
+		Parameters: input.Parameters,
 	}).Get(ctx, &cloneResult); err != nil {
 		return CIPipelineResult{Status: "failed"}, fmt.Errorf("clone: %w", err)
 	}
 
 	// 1b. Multi-pipeline dispatch: if no specific pipeline requested and repo has multiple,
 	// fan out to one workflow per pipeline and return aggregated result.
-	if (input.PipelineName == "" || input.PipelineName == "default") && len(cloneResult.Pipelines) > 1 {
-		return dispatchPipelines(ctx, input, cloneResult)
+	if cloneResult.Skipped {
+		currentStatus = "skipped"
+		_ = workflow.ExecuteActivity(withReportOptions(ctx), acts.Cleanup, cloneResult.Dir).Get(ctx, nil)
+		return CIPipelineResult{Status: "skipped", PipelineName: input.PipelineName}, nil
+	}
+	if input.PipelineName == "" && len(cloneResult.Pipelines) > 1 {
+		result, err := dispatchPipelines(ctx, input, cloneResult)
+		currentStatus = result.Status
+		_ = workflow.ExecuteActivity(withReportOptions(ctx), acts.Cleanup, cloneResult.Dir).Get(ctx, nil)
+		return result, err
+	}
+	if cloneResult.PipelineName != "" {
+		input.PipelineName = cloneResult.PipelineName
 	}
 
 	// 2. Pending status
 	currentStatus = "pending"
 	reportCtx := withReportOptions(ctx)
-	_ = workflow.ExecuteActivity(reportCtx, acts.SetCommitStatus, activities.StatusInput{
-		Repo: input.Repo, HeadSHA: input.HeadSHA,
-		State: "pending", Description: "CI running...",
-	}).Get(ctx, nil)
+	if input.PipelineName == "" || input.PipelineName == "ci" || input.PipelineName == "default" {
+		_ = workflow.ExecuteActivity(reportCtx, acts.SetCommitStatus, activities.StatusInput{
+			Repo: input.Repo, HeadSHA: input.HeadSHA,
+			State: "pending", Description: "CI running...",
+		}).Get(ctx, nil)
+	}
 
 	// 3. Load steps
 	steps := cloneResult.Steps
@@ -62,10 +78,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	resolvedSecrets := fetchSecrets(ctx, acts, steps, input.SecretsPrefix)
 
 	// 5. Build environment from parameters
-	paramEnv := input.Parameters
-	if paramEnv == nil {
-		paramEnv = map[string]string{}
-	}
+	paramEnv := mergeEnv(input.Parameters, cloneResult.Parameters)
 	// Add event metadata to env for conditional evaluation
 	paramEnv["event"] = input.Event
 	paramEnv["branch"] = input.Ref
@@ -120,6 +133,7 @@ func CIPipeline(ctx workflow.Context, input CIPipelineInput) (CIPipelineResult, 
 	// 9. Cleanup
 	_ = workflow.ExecuteActivity(dReportCtx, acts.Cleanup, cloneResult.Dir).Get(dCtx, nil)
 
+	currentStatus = overallStatus
 	return CIPipelineResult{Status: overallStatus, Steps: results, PipelineName: input.PipelineName}, nil
 }
 
@@ -129,9 +143,6 @@ func dispatchPipelines(ctx workflow.Context, input CIPipelineInput, cloneResult 
 	var names []string
 
 	for _, name := range cloneResult.Pipelines {
-		if name == "default" {
-			continue
-		}
 		childInput := input
 		childInput.PipelineName = name
 
@@ -152,7 +163,7 @@ func dispatchPipelines(ctx workflow.Context, input CIPipelineInput, cloneResult 
 			allSteps = append(allSteps, activities.StepResult{Name: names[i], Status: "failed"})
 		} else {
 			allSteps = append(allSteps, result.Steps...)
-			if result.Status == "failed" {
+			if result.Status == "failed" || result.Status == "cancelled" {
 				overall = "failed"
 			}
 		}
@@ -166,7 +177,7 @@ func MatrixChild(ctx workflow.Context, input activities.MatrixChildInput) (activ
 	var acts *activities.Activities
 
 	stepInput := activities.RunStepInput{
-		Dir: input.Dir, Command: input.Step.Command, Name: input.StepName,
+		Dir: input.Dir, Command: input.Step.GetEffectiveCommand(), Name: input.StepName,
 		Image: input.Step.Image, Repo: input.Repo, Ref: input.Ref,
 		Secrets: input.Secrets, MatrixVars: input.MatrixVars,
 		Docker: input.Step.Docker, Privileged: input.Step.Privileged,
@@ -304,16 +315,15 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 				for _, sr := range mr.Steps {
 					results = append(results, sr)
 				}
-				if mr.Status == "failed" {
+				if mr.Status == "failed" || mr.Status == "cancelled" {
 					matrixFailed = true
 				}
 			}
-			if matrixFailed && step.Matrix.FailFast {
+			if matrixFailed {
 				overallStatus = "failed"
-			} else if matrixFailed {
-				// Matrix failures don't fail parent by default
+			} else {
+				completed[step.Name] = true
 			}
-			completed[step.Name] = true
 			continue
 		}
 
@@ -324,7 +334,7 @@ func runSteps(ctx workflow.Context, acts *activities.Activities, steps []activit
 				result.Status = "failed"
 				overallStatus = "failed"
 			}
-			if result.Status == "failed" {
+			if result.Status == "failed" || result.Status == "cancelled" {
 				overallStatus = "failed"
 			}
 			if len(result.Outputs) > 0 {
@@ -490,15 +500,53 @@ func runMatrixStep(ctx workflow.Context, acts *activities.Activities, step activ
 	}
 
 	var childResults []activities.MatrixChildResult
-	futures := make([]workflow.Future, 0, len(combos))
-	keys := make([]string, 0, len(combos))
+	type pendingChild struct {
+		future workflow.ChildWorkflowFuture
+		cancel workflow.CancelFunc
+		key    string
+		name   string
+	}
+	var pending []pendingChild
+	stopped := false
+	collect := func(child pendingChild) {
+		var result activities.MatrixChildResult
+		err := child.future.Get(ctx, &result)
+		if err != nil || result.Status == "" {
+			output := "matrix child returned no status"
+			if err != nil {
+				output = err.Error()
+			}
+			result = activities.MatrixChildResult{
+				MatrixKey: child.key, Status: "failed",
+				Steps: []activities.StepResult{{
+					Name: child.name, MatrixKey: child.key,
+					Status: "failed", ExitCode: -1, Output: output,
+				}},
+			}
+		}
+		childResults = append(childResults, result)
+		if result.Status != "passed" && step.Matrix.FailFast {
+			stopped = true
+			for _, other := range pending {
+				other.cancel()
+			}
+		}
+	}
 
 	for i, combo := range combos {
 		key := eval.MatrixKey(combo)
+		name := fmt.Sprintf("%s [%s]", step.Name, key)
+		if stopped {
+			childResults = append(childResults, activities.MatrixChildResult{
+				MatrixKey: key, Status: "skipped",
+				Steps: []activities.StepResult{{Name: name, MatrixKey: key, Status: "skipped", ExitCode: -1}},
+			})
+			continue
+		}
 		childInput := activities.MatrixChildInput{
 			ParentWorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 			PipelineName:     input.PipelineName,
-			StepName:         fmt.Sprintf("%s [%s]", step.Name, key),
+			StepName:         name,
 			MatrixKey:        key,
 			MatrixVars:       combo,
 			Step:             step,
@@ -506,30 +554,31 @@ func runMatrixStep(ctx workflow.Context, acts *activities.Activities, step activ
 			Repo:             input.Repo,
 			Ref:              input.Ref,
 			HeadSHA:          input.HeadSHA,
-			Secrets:          buildStepSecrets(step, secrets),
+			Secrets:          mergeEnv(buildStepSecrets(step, secrets), paramEnv, flattenOutputs(allOutputs)),
 		}
 
 		childOpts := workflow.ChildWorkflowOptions{
 			WorkflowID: fmt.Sprintf("%s-matrix-%s-%d", workflow.GetInfo(ctx).WorkflowExecution.ID, step.Name, i),
 		}
-		childCtx := workflow.WithChildOptions(ctx, childOpts)
-		futures = append(futures, workflow.ExecuteChildWorkflow(childCtx, MatrixChild, childInput))
-		keys = append(keys, key)
+		childCtx, cancel := workflow.WithCancel(workflow.WithChildOptions(ctx, childOpts))
+		pending = append(pending, pendingChild{
+			future: workflow.ExecuteChildWorkflow(childCtx, MatrixChild, childInput),
+			cancel: cancel, key: key, name: name,
+		})
 
 		// Throttle parallel execution
-		if len(futures) >= maxParallel {
-			var result activities.MatrixChildResult
-			_ = futures[0].Get(ctx, &result)
-			childResults = append(childResults, result)
-			futures = futures[1:]
+		if len(pending) >= maxParallel {
+			child := pending[0]
+			pending = pending[1:]
+			collect(child)
 		}
 	}
 
 	// Collect remaining
-	for _, f := range futures {
-		var result activities.MatrixChildResult
-		_ = f.Get(ctx, &result)
-		childResults = append(childResults, result)
+	for len(pending) > 0 {
+		child := pending[0]
+		pending = pending[1:]
+		collect(child)
 	}
 
 	return childResults
@@ -591,12 +640,12 @@ func runSinglePostStep(ctx workflow.Context, acts *activities.Activities, step a
 // runChildPipeline triggers a child pipeline and optionally waits for it.
 func runChildPipeline(ctx workflow.Context, trigger activities.TriggerStep, input CIPipelineInput) (activities.StepResult, error) {
 	childInput := CIPipelineInput{
-		Event:        input.Event,
-		Repo:         input.Repo,
-		Ref:          input.Ref,
-		HeadSHA:      input.HeadSHA,
-		PipelineName: trigger.Pipeline,
-		Parameters:   trigger.Parameters,
+		Event:         "pipeline",
+		Repo:          input.Repo,
+		Ref:           input.Ref,
+		HeadSHA:       input.HeadSHA,
+		PipelineName:  trigger.Pipeline,
+		Parameters:    trigger.Parameters,
 		SecretsPrefix: input.SecretsPrefix,
 	}
 
@@ -733,9 +782,9 @@ func withCloneOptions(ctx workflow.Context) workflow.Context {
 		StartToCloseTimeout: 5 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			MaximumAttempts:    3,
-			InitialInterval:   5 * time.Second,
+			InitialInterval:    5 * time.Second,
 			BackoffCoefficient: 2.0,
-			MaximumInterval:   30 * time.Second,
+			MaximumInterval:    30 * time.Second,
 		},
 	})
 }

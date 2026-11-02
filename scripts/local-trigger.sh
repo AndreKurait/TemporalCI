@@ -4,11 +4,11 @@ REPO="${1:?Usage: local-trigger.sh owner/repo [ref]}"
 REF="${2:-refs/heads/main}"
 SECRET="${WEBHOOK_SECRET:-}"
 if [[ -z "$SECRET" ]]; then
-  SECRET="$(kubectl get secret temporalci-secrets -n temporalci \
+  SECRET="$(kubectl --context minikube get secret temporalci-local-secrets -n temporalci \
     -o jsonpath='{.data.github-webhook-secret}' | openssl base64 -d -A)"
 fi
 if [[ -z "$SECRET" ]]; then
-  echo "Set WEBHOOK_SECRET or create the local temporalci-secrets Secret." >&2
+  echo "Set WEBHOOK_SECRET or create the local temporalci-local-secrets Secret." >&2
   exit 1
 fi
 

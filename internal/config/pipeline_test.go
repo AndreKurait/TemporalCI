@@ -163,7 +163,7 @@ func TestShouldRun_TagFilter(t *testing.T) {
 			Push: &PushFilter{Tags: []string{"*"}},
 		},
 	}
-	if !p.ShouldRun("push", "v1.0.0") {
+	if !p.ShouldRun("push", "refs/tags/v1.0.0") {
 		t.Error("should run for tag push with wildcard")
 	}
 }
